@@ -9,14 +9,17 @@ import (
 )
 
 type Assets struct {
-	imgs         map[string]*ebiten.Image
-	tileMaps     map[string][]*ebiten.Image
-	spriteSheets map[string][]*ebiten.Image
+	imgs    map[string]*ebiten.Image
+	tiles   map[string][]*ebiten.Image
+	sprites map[string][]*ebiten.Image
 }
 
 func NewAssets() *Assets {
-	imgs := map[string]*ebiten.Image{}
-	return &Assets{imgs: imgs}
+	return &Assets{
+		imgs:    map[string]*ebiten.Image{},
+		tiles:   map[string][]*ebiten.Image{},
+		sprites: map[string][]*ebiten.Image{},
+	}
 }
 
 func (a *Assets) GetImage(imgName string) (*ebiten.Image, error) {
@@ -33,18 +36,31 @@ func (a *Assets) AddImage(imgName string, img *ebiten.Image) {
 
 func (a *Assets) LoadTileSetFromPath(name, path string, tileSize int) {
 	sheet := loadEbitenImage(path)
+	a.tiles[name] = splitSheet(sheet, tileSize)
+}
+
+func (a *Assets) LoadSpriteSheetFromPath(name, path string, frameSize int) {
+	sheet := loadEbitenImage(path)
+	a.sprites[name] = splitSheet(sheet, frameSize)
+}
+
+func splitSheet(sheet *ebiten.Image, frameSize int) []*ebiten.Image {
 	b := sheet.Bounds()
 	w := b.Dx()
 	h := b.Dy()
 
+	if w%frameSize != 0 || h%frameSize != 0 {
+		panic("Assets sheet not divisible by frame size")
+	}
+
 	var tiles []*ebiten.Image
-	for y := 0; y < h; y += tileSize {
-		for x := 0; x < w; x += tileSize {
-			sub := sheet.SubImage(image.Rect(x, y, x+tileSize, y+tileSize)).(*ebiten.Image)
+	for y := 0; y < h; y += frameSize {
+		for x := 0; x < w; x += frameSize {
+			sub := sheet.SubImage(image.Rect(x, y, x+frameSize, y+frameSize)).(*ebiten.Image)
 			tiles = append(tiles, sub)
 		}
 	}
-	a.tileMaps[name] = tiles
+	return tiles
 }
 
 func loadEbitenImage(path string) *ebiten.Image {
