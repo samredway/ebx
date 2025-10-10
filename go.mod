@@ -6,7 +6,7 @@ toolchain go1.24.8
 
 require (
 	github.com/Rulox/ebitmx v0.0.0-20210328203036-c183f6244342
-	github.com/hajimehoshi/ebiten/v2 v2.10.0-alpha.1.0.20251008140922-549a80d42fbf
+	github.com/hajimehoshi/ebiten/v2 v2.9.1
 )
 
 require (
