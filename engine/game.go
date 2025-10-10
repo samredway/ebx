@@ -5,6 +5,25 @@ import (
 	"github.com/samredway/ebx/assets"
 )
 
+// Entity is just an ID that allows groups of components to be matched together
+type EntityId int
+
+type IdGen struct {
+	last EntityId
+}
+
+func (ig *IdGen) New() EntityId {
+	ig.last++
+	return ig.last
+}
+
+// System interface for all systems such as render and collision systems - see
+// the system pacakge for available system implementations
+type System interface {
+	Draw(*ebiten.Image)
+	Update(float64)
+}
+
 // Scene is a level or view like a menu screen for example that has its own
 // behviour. If you return a Scene from Update the Game will load in the
 // new scene.
@@ -14,6 +33,26 @@ type Scene interface {
 	Draw(*ebiten.Image)
 	Update(float64) Scene
 }
+
+// SceneBase is a template for how scene operates with its required hooks this can
+// be embedded into new scenes and its methods overriden as desired
+type SceneBase struct{}
+
+// OnEnter is called on each scene load and should be used for setup like creating
+// components and adding them to their relevant systems
+func (sb *SceneBase) OnEnter() {}
+
+// OnExit is called when the scene is removed from current and allows exit transitions
+// and clean up
+func (sb *SceneBase) OnExit() {}
+
+// Update us used primarily to run the relevant systems update methods
+func (sb *SceneBase) Update(dt float64) Scene {
+	return nil
+}
+
+// Draw will primarily run the scenes systems Draw methods
+func (sb *SceneBase) Draw(screen *ebiten.Image) {}
 
 // Game object implements ebiten.Game interface
 type Game struct {
