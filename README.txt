@@ -1,31 +1,41 @@
 # Ebiten Engine Extension (ebx)
 
-This is my own personal collection of wrappers around ebiten to make 2D game development alittle smoother. 
+**ebx** is my tiny, personal toolkit on top of [Ebiten](https://ebiten.org/) for making small 2D games in Go.  
 
-My motivation for writing this is simply that there is no fully developed engine in Golang - which I prefer to write code in and I like having a collection of small libs that I can mix and match and load in as required keeping my binary very small and focused for the exact game idea I am workign on. I put this together so I could quickly build out and play with some prototypes with very little effort.
+I started writing this after doing some small game prototypes in Godot. While Godot is excellent, I realised I only needed a small subset of its features for my own projects—and I prefer writing code directly over working inside a heavy editor. I also wanted to stay in my favourite language (Go) and couldn’t find an existing engine that fit that niche.
 
-As such each feature can be loaded and used as is or you can load the entire collection from the root engine package.
+So this is a super-minimal 2D engine designed for building out ideas fast.
 
+---
 
-## Key Features
+## Design Philosophy
 
-- **TileMap**: I use Tiled the free and open source time map editor as a level designer. The TileMap obj holds the complete map along with funcs for laoding and managing the exported .tmx file with your level in.
+- **Scene-based architecture:**  
+  A `Scene` interface with `OnEnter`, `OnExit`, `Update`, and `Draw`, plus a `Game` wrapper implementing `ebiten.Game`.  
+  Scenes define their own entities, logic, and transitions, keeping state self-contained and easy to reason about.
 
-- **Camera**: A simple 2D camera to make handling viewport offsets etc a little easer
+- **Simple ECS pattern:**  
+  Entities are just IDs (`EntityId` + `IdGen`).  
+  Components hold data, and systems operate on those components.  
+  The goal isn’t cache optimisation—it’s clean, decoupled, composable code. Each system manages its own data and can evolve independently without tight coupling to other systems.
 
-- **AssetLoader**: Functionality for loading and storing assets (spritesheets, tilesets, backgrounds etc) in RAM at runtime.
+- **System-driven updates:**  
+  Instead of looping per entity, each system iterates its own component collection and performs updates or draws in a defined order.  
+  This keeps logic modular, predictable, and easy to extend.
 
-- **Ecs**: Very basic ECS system. The aim here is not performance or cache consistency (not really an issue in most 2d games) but rather I just think this is a handy way to manage code and handle object composition.
+- **Small and composable:**  
+  Everything is kept as small, clear packages with no global state. Each piece—scene, camera, tiles, assets—can be used on its own or combined as needed.
 
-- **InputSystem**: Handles user input
+---
 
-- **AnimationSystem**: Handles sprite animation
+## License
 
-- **CollisionSystem**: Handles collision detection between objects
+Released under the **MIT License** — free to use, modify, and build on.  
+Contributions, forks, and experiments are all welcome.
 
-- **PlayerEntity**: Simple player entity which can be loaded in with a sprite sheet so as to quickly get a game running. 
+---
 
+## Status
 
-## Examples
-
-To see exaclty how to use this small library just check the `examples/` folder.
+Work in progress and intentionally lightweight.  
+Code is written to be idiomatic, readable, and easy to extend for quick 2D prototypes.
