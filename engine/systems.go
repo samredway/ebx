@@ -98,7 +98,12 @@ func NewRenderSystem(pos *PositionStore) *RenderSystem {
 }
 
 func (rs *RenderSystem) Draw(screen *ebiten.Image) {
-	// TODO next session
+	for _, r := range rs.components {
+		pos := rs.pos.GetPosition(r.GetEntityId())
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(pos.X, pos.Y)
+		screen.DrawImage(screen, opts)
+	}
 }
 
 // MovementSystem handles updating position component for corresponding entity
