@@ -5,6 +5,13 @@ import (
 	"github.com/samredway/ebx/geom"
 )
 
+// Component is a data only object that can be processed by System's. It should hold
+// only the data that is required for a given task. For example movement may only
+// require the X, Y and Speed values of an entity.
+type Component interface {
+	GetEntityId() EntityId
+}
+
 // ComponentBase gives base functionality for all components
 type ComponentBase struct {
 	EntityId EntityId
@@ -28,7 +35,7 @@ type MovementComponent struct {
 }
 
 // RenderComponent holds current image
-type RenderComponenet struct {
+type RenderComponent struct {
 	ComponentBase
 	img *ebiten.Image
 }

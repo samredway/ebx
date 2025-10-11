@@ -1,12 +1,21 @@
 package engine
 
-import "github.com/samredway/ebx/collections"
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/samredway/ebx/collections"
+)
 
 // PositionStore has no update but acts as a store for position component
 // that gets updated by movement system and read from by some others like
 // render and collision
 type PositionStore struct {
 	positions map[EntityId]*PositionComponent
+}
+
+func NewPositionStore() *PositionStore {
+	return &PositionStore{
+		positions: map[EntityId]*PositionComponent{},
+	}
 }
 
 func (ps *PositionStore) GetPosition(id EntityId) *PositionComponent {
@@ -23,48 +32,96 @@ func (ps *PositionStore) Attach(comps ...*PositionComponent) {
 	}
 }
 
-// RenderSystem
+func (ps *PositionStore) Detach(comps ...*PositionComponent) {
+	for _, comp := range comps {
+		delete(ps.positions, comp.EntityId)
+	}
+}
+
+// SystemBase is a generic base for all system classes with the key methods for
+// attach and detach definied and the slice of components required for interation
+type SystemBase[C Component] struct {
+	components []C
+	remove     collections.Set[EntityId]
+}
+
+func NewSystemBase[C Component]() *SystemBase[C] {
+	return &SystemBase[C]{
+		components: []C{},
+		remove:     collections.Set[EntityId]{},
+	}
+}
+
+func (sb *SystemBase[C]) Attach(comp ...C) {
+	sb.components = append(sb.components, comp...)
+}
+
+func (sb *SystemBase[C]) Detach(ids ...EntityId) {
+	for _, id := range ids {
+		sb.remove.Add(id)
+	}
+}
+
+func (sb *SystemBase[C]) Update(dt float64) {
+	// Point a new slice handle to the underlaying components array but with 0 length
+	active := sb.components[:0]
+
+	for _, c := range sb.components {
+		// Remove and compact those on the remove list
+		if sb.remove.Has(c.GetEntityId()) {
+			sb.remove.Remove(c.GetEntityId())
+			continue
+		}
+		active = append(active, c)
+
+	}
+
+	// Remove any potential ids that do no longer exist
+	sb.remove.Clear()
+
+	// Reattach the slice handle to the underlying array so it re-indexes and gets
+	// the correct new length
+	sb.components = active
+}
+
+// RenderSystem gets run in the Scene.Draw() method
+type RenderSystem struct {
+	*SystemBase[RenderComponent]
+	pos *PositionStore
+}
+
+func NewRenderSystem(pos *PositionStore) *RenderSystem {
+	return &RenderSystem{
+		SystemBase: NewSystemBase[RenderComponent](),
+		pos:        pos,
+	}
+}
+
+func (rs *RenderSystem) Draw(screen *ebiten.Image) {
+	// TODO next session
+}
 
 // MovementSystem handles updating position component for corresponding entity
 // based on movement data
 type MovementSystem struct {
-	ps        *PositionStore
-	movements []MovementComponent
-	remove    collections.Set[EntityId]
+	*SystemBase[MovementComponent]
+	pos *PositionStore
 }
 
-func (ms *MovementSystem) Attach(comps ...MovementComponent) {
-	ms.movements = append(ms.movements, comps...)
-}
-
-func (ms *MovementSystem) Detach(ids ...EntityId) {
-	for _, id := range ids {
-		ms.remove.Add(id)
+func NewMovementSystem(pos *PositionStore) *MovementSystem {
+	return &MovementSystem{
+		SystemBase: NewSystemBase[MovementComponent](),
+		pos:        pos,
 	}
 }
 
 func (ms *MovementSystem) Update(dt float64) {
-	// Point a new slice handle to the underlaying movements array but with 0 length
-	active := ms.movements[:0]
+	ms.SystemBase.Update(dt)
 
-	for _, m := range ms.movements {
-		// Remove and compact those on the remove list
-		if ms.remove.Has(m.EntityId) {
-			ms.remove.Remove(m.EntityId)
-			continue
-		}
-		active = append(active, m)
-
+	for _, m := range ms.components {
 		// Handle movement updates
-		pos := ms.ps.GetPosition(m.EntityId)
+		pos := ms.pos.GetPosition(m.GetEntityId())
 		pos.X += m.Direction.X * m.Speed * dt
 		pos.Y += m.Direction.Y * m.Speed * dt
 	}
-
-	// Remove any potential ids that do no longer exist
-	ms.remove.Clear()
-
-	// Reattach the slice handle to the underlying array so it re-indexes and gets
-	// the correct new length
-	ms.movements = active
 }
