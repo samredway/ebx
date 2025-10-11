@@ -12,16 +12,9 @@ type IdGen struct {
 	last EntityId
 }
 
-func (ig *IdGen) New() EntityId {
+func (ig *IdGen) Next() EntityId {
 	ig.last++
 	return ig.last
-}
-
-// System interface for all systems such as render and collision systems - see
-// the system pacakge for available system implementations
-type System interface {
-	Draw(*ebiten.Image)
-	Update(float64)
 }
 
 // Scene is a level or view like a menu screen for example that has its own
@@ -36,11 +29,15 @@ type Scene interface {
 
 // SceneBase is a template for how scene operates with its required hooks this can
 // be embedded into new scenes and its methods overriden as desired
-type SceneBase struct{}
+type SceneBase struct {
+	Ids IdGen
+}
 
 // OnEnter is called on each scene load and should be used for setup like creating
 // components and adding them to their relevant systems
-func (sb *SceneBase) OnEnter() {}
+func (sb *SceneBase) OnEnter() {
+	sb.Ids = IdGen{}
+}
 
 // OnExit is called when the scene is removed from current and allows exit transitions
 // and clean up
@@ -76,7 +73,7 @@ func NewGame(scene Scene, assets *assets.Assets, screenW, screenH int) *Game {
 }
 
 func (g *Game) Update() error {
-	fps := ebiten.ActualFPS()
+	fps := float64(ebiten.TPS())
 	dt := 1 / fps
 	scene := g.curr.Update(dt)
 	if scene != nil {

@@ -12,6 +12,16 @@ type ExampleScene struct {
 	engine.SceneBase
 }
 
+func (es *ExampleScene) OnEnter() {
+	es.SceneBase.OnEnter()
+	playerId := es.Ids.Next()
+	// Create a render component
+	// Transform component
+	// Input hanlder
+	// Should now be able to see player and move around.
+	// Perhpas move player into prefabs?
+}
+
 func main() {
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Top down Example")
