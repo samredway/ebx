@@ -30,13 +30,17 @@ type Scene interface {
 // SceneBase is a template for how scene operates with its required hooks this can
 // be embedded into new scenes and its methods overriden as desired
 type SceneBase struct {
-	Ids IdGen
+	Ids       IdGen
+	PosStore  *PositionStore
+	RenderSys *RenderSystem
 }
 
 // OnEnter is called on each scene load and should be used for setup like creating
 // components and adding them to their relevant systems
 func (sb *SceneBase) OnEnter() {
 	sb.Ids = IdGen{}
+	sb.PosStore = NewPositionStore()
+	sb.RenderSys = NewRenderSystem(sb.PosStore)
 }
 
 // OnExit is called when the scene is removed from current and allows exit transitions
@@ -49,7 +53,9 @@ func (sb *SceneBase) Update(dt float64) Scene {
 }
 
 // Draw will primarily run the scenes systems Draw methods
-func (sb *SceneBase) Draw(screen *ebiten.Image) {}
+func (sb *SceneBase) Draw(screen *ebiten.Image) {
+	sb.RenderSys.Draw(screen)
+}
 
 // Game object implements ebiten.Game interface
 type Game struct {

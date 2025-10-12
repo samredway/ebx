@@ -86,13 +86,13 @@ func (sb *SystemBase[C]) Update(dt float64) {
 
 // RenderSystem gets run in the Scene.Draw() method
 type RenderSystem struct {
-	*SystemBase[RenderComponent]
+	*SystemBase[*RenderComponent]
 	pos *PositionStore
 }
 
 func NewRenderSystem(pos *PositionStore) *RenderSystem {
 	return &RenderSystem{
-		SystemBase: NewSystemBase[RenderComponent](),
+		SystemBase: NewSystemBase[*RenderComponent](),
 		pos:        pos,
 	}
 }
@@ -102,20 +102,20 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 		pos := rs.pos.GetPosition(r.GetEntityId())
 		opts := &ebiten.DrawImageOptions{}
 		opts.GeoM.Translate(pos.X, pos.Y)
-		screen.DrawImage(screen, opts)
+		screen.DrawImage(r.Img, opts)
 	}
 }
 
 // MovementSystem handles updating position component for corresponding entity
 // based on movement data
 type MovementSystem struct {
-	*SystemBase[MovementComponent]
+	*SystemBase[*MovementComponent]
 	pos *PositionStore
 }
 
 func NewMovementSystem(pos *PositionStore) *MovementSystem {
 	return &MovementSystem{
-		SystemBase: NewSystemBase[MovementComponent](),
+		SystemBase: NewSystemBase[*MovementComponent](),
 		pos:        pos,
 	}
 }

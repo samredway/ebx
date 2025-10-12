@@ -37,5 +37,5 @@ type MovementComponent struct {
 // RenderComponent holds current image
 type RenderComponent struct {
 	ComponentBase
-	img *ebiten.Image
+	Img *ebiten.Image
 }
