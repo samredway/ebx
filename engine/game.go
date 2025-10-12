@@ -1,8 +1,11 @@
 package engine
 
 import (
+	"image"
+
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/samredway/ebx/assets"
+	"github.com/samredway/ebx/camera"
+	"github.com/samredway/ebx/geom"
 )
 
 // Entity is just an ID that allows groups of components to be matched together
@@ -25,12 +28,15 @@ type Scene interface {
 	OnExit()
 	Draw(*ebiten.Image)
 	Update(float64) Scene
+	SetViewport(geom.Size)
 }
 
 // SceneBase is a template for how scene operates with its required hooks this can
 // be embedded into new scenes and its methods overriden as desired
 type SceneBase struct {
+	Viewport     geom.Size
 	Ids          IdGen
+	Camera       *camera.Camera
 	PosStore     *PositionStore
 	RenderSys    *RenderSystem
 	MoveSys      *MovementSystem
@@ -41,8 +47,14 @@ type SceneBase struct {
 // components and adding them to their relevant systems
 func (sb *SceneBase) OnEnter() {
 	sb.Ids = IdGen{}
+	// Create a camera with a default worlsize of Viewport for now. When the tile map
+	// is done can add a proper world bounds
+	sb.Camera = camera.NewCamera(
+		sb.Viewport,
+		image.Rect(0, 0, sb.Viewport.W, sb.Viewport.H),
+	)
 	sb.PosStore = NewPositionStore()
-	sb.RenderSys = NewRenderSystem(sb.PosStore)
+	sb.RenderSys = NewRenderSystem(sb.PosStore, sb.Camera)
 	sb.MoveSys = NewMovementSystem(sb.PosStore)
 	sb.UserInputSys = &UserInputSystem{}
 }
@@ -64,24 +76,27 @@ func (sb *SceneBase) Draw(screen *ebiten.Image) {
 	sb.RenderSys.Draw(screen)
 }
 
+// Set the view port size
+func (sb *SceneBase) SetViewport(view geom.Size) {
+	sb.Viewport = view
+}
+
 // Game object implements ebiten.Game interface
 type Game struct {
-	curr    Scene
-	assets  *assets.Assets
-	screenW int
-	screenH int
+	curr     Scene
+	viewport geom.Size
 }
 
 // NewGame returns a Game object that can run in Ebiten.
 // You can must pass in a Scene argument that is your opening scene along with
 // an Assets object which contains all the assets your game requires
-func NewGame(scene Scene, assets *assets.Assets, screenW, screenH int) *Game {
+func NewGame(scene Scene, screenW, screenH int) *Game {
+	viewport := geom.Size{W: screenW, H: screenH}
+	scene.SetViewport(viewport)
 	scene.OnEnter()
 	return &Game{
-		curr:    scene,
-		assets:  assets,
-		screenW: screenW,
-		screenH: screenH,
+		curr:     scene,
+		viewport: viewport,
 	}
 }
 
@@ -102,5 +117,5 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return g.screenW, g.screenH
+	return g.viewport.W, g.viewport.H
 }

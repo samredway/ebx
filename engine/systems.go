@@ -2,8 +2,9 @@ package engine
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/samredway/ebx/camera"
 	"github.com/samredway/ebx/collections"
-	"math"
+	"github.com/samredway/ebx/geom"
 )
 
 // PositionStore has no update but acts as a store for position component
@@ -87,23 +88,34 @@ func (sb *SystemBase[C]) Update(dt float64) {
 // RenderSystem gets run in the Scene.Draw() method
 type RenderSystem struct {
 	*SystemBase[*RenderComponent]
-	pos *PositionStore
+	pos       *PositionStore
+	cam       *camera.Camera
+	camTarget EntityId
 }
 
-func NewRenderSystem(pos *PositionStore) *RenderSystem {
+func NewRenderSystem(pos *PositionStore, cam *camera.Camera) *RenderSystem {
 	return &RenderSystem{
 		SystemBase: NewSystemBase[*RenderComponent](),
 		pos:        pos,
+		cam:        cam,
 	}
 }
 
 func (rs *RenderSystem) Draw(screen *ebiten.Image) {
+	pPos := rs.pos.GetPosition(rs.camTarget)
+	rs.cam.CentreOn(pPos.Vec2)
+
 	for _, r := range rs.components {
 		pos := rs.pos.GetPosition(r.GetEntityId())
 		opts := &ebiten.DrawImageOptions{}
-		opts.GeoM.Translate(pos.X, pos.Y)
+		screenCoords := rs.cam.Apply(pos.Vec2)
+		opts.GeoM.Translate(screenCoords.X, screenCoords.Y)
 		screen.DrawImage(r.Img, opts)
 	}
+}
+
+func (rs *RenderSystem) SetCamTarget(id EntityId) {
+	rs.camTarget = id
 }
 
 // MovementSystem handles updating position component for corresponding entity
@@ -125,14 +137,7 @@ func (ms *MovementSystem) Update(dt float64) {
 
 	for _, m := range ms.components {
 		pos := ms.pos.GetPosition(m.GetEntityId())
-
-		// Normalize diagonal movement
-		length := math.Hypot(m.Direction.X, m.Direction.Y)
-		if length > 0 {
-			m.Direction.X /= length
-			m.Direction.Y /= length
-		}
-
+		m.Direction = geom.Normalize(m.Direction)
 		pos.X += m.Direction.X * m.Speed * dt
 		pos.Y += m.Direction.Y * m.Speed * dt
 	}

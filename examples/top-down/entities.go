@@ -17,7 +17,7 @@ import (
 // normall this function should only be called once in a game
 func NewPlayer(
 	idGen engine.IdGen,
-	rs *engine.RenderSystem,
+	render *engine.RenderSystem,
 	pos *engine.PositionStore,
 	mov *engine.MovementSystem,
 	inp *engine.UserInputSystem,
@@ -32,7 +32,7 @@ func NewPlayer(
 		ComponentBase: engine.ComponentBase{EntityId: pId},
 		Img:           pImg,
 	}
-	rs.Attach(pRc)
+	render.Attach(pRc)
 
 	// Player pos
 	pPos := &engine.PositionComponent{
@@ -40,6 +40,9 @@ func NewPlayer(
 		Vec2:          geom.Vec2{X: 100, Y: 100},
 	}
 	pos.Attach(pPos)
+
+	// Attach to camera
+	render.SetCamTarget(pId)
 
 	// Player movement
 	pMov := &engine.MovementComponent{

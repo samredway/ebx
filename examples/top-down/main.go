@@ -4,17 +4,20 @@ import (
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/samredway/ebx/assets"
 	"github.com/samredway/ebx/engine"
 )
 
+const (
+	screenW = 640
+	screenH = 480
+)
+
 func main() {
-	ebiten.SetWindowSize(640, 480)
+	ebiten.SetWindowSize(screenW, screenH)
 	ebiten.SetWindowTitle("Top down Example")
 	ebiten.SetTPS(60)
 	scene := &ExampleScene{}
-	assets := assets.NewAssets()
-	if err := ebiten.RunGame(engine.NewGame(scene, assets, 640, 480)); err != nil {
+	if err := ebiten.RunGame(engine.NewGame(scene, screenW, screenH)); err != nil {
 		log.Fatal(err)
 	}
 }
