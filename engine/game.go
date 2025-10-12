@@ -33,6 +33,7 @@ type SceneBase struct {
 	Ids       IdGen
 	PosStore  *PositionStore
 	RenderSys *RenderSystem
+	MoveSys   *MovementSystem
 }
 
 // OnEnter is called on each scene load and should be used for setup like creating
@@ -41,6 +42,7 @@ func (sb *SceneBase) OnEnter() {
 	sb.Ids = IdGen{}
 	sb.PosStore = NewPositionStore()
 	sb.RenderSys = NewRenderSystem(sb.PosStore)
+	sb.MoveSys = NewMovementSystem(sb.PosStore)
 }
 
 // OnExit is called when the scene is removed from current and allows exit transitions
@@ -49,6 +51,8 @@ func (sb *SceneBase) OnExit() {}
 
 // Update us used primarily to run the relevant systems update methods
 func (sb *SceneBase) Update(dt float64) Scene {
+	sb.RenderSys.Update(dt)
+	sb.MoveSys.Update(dt)
 	return nil
 }
 
