@@ -109,6 +109,18 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 		pos := rs.pos.GetPosition(r.GetEntityId())
 		opts := &ebiten.DrawImageOptions{}
 		screenCoords := rs.cam.Apply(pos.Vec2)
+
+		imgW := float64(r.Img.Bounds().Dx())
+		imgH := float64(r.Img.Bounds().Dy())
+		viewW := float64(rs.cam.Viewport.W)
+		viewH := float64(rs.cam.Viewport.H)
+
+		// Skip anything outside the visible screen
+		if screenCoords.X < -imgW || screenCoords.X > viewW ||
+			screenCoords.Y < -imgH || screenCoords.Y > viewH {
+			continue
+		}
+
 		opts.GeoM.Translate(screenCoords.X, screenCoords.Y)
 		screen.DrawImage(r.Img, opts)
 	}
