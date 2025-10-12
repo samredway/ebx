@@ -3,6 +3,7 @@ package engine
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/collections"
+	"math"
 )
 
 // PositionStore has no update but acts as a store for position component
@@ -73,7 +74,6 @@ func (sb *SystemBase[C]) Update(dt float64) {
 			continue
 		}
 		active = append(active, c)
-
 	}
 
 	// Remove any potential ids that do no longer exist
@@ -124,9 +124,54 @@ func (ms *MovementSystem) Update(dt float64) {
 	ms.SystemBase.Update(dt)
 
 	for _, m := range ms.components {
-		// Handle movement updates
 		pos := ms.pos.GetPosition(m.GetEntityId())
+
+		// Normalize diagonal movement
+		length := math.Hypot(m.Direction.X, m.Direction.Y)
+		if length > 0 {
+			m.Direction.X /= length
+			m.Direction.Y /= length
+		}
+
 		pos.X += m.Direction.X * m.Speed * dt
 		pos.Y += m.Direction.Y * m.Speed * dt
 	}
+}
+
+// InputSystem handles user input and applies it to a given movement component
+// NOTE: InputSystem has a slightly different interface to other systems as it really
+// .only handles one component although it could easily be updated to match the
+// others later if required
+// NOTE: This is probably not very extensible but its hard for me to think how to
+// really generalise this right now. Will probalby come back to this and give it a
+// bit more thought. We will want other types of system that can update movement and
+// initialse other types of actions like shooting eg EnemyTypeXAiInputSystem. I think
+// this is something I will iterate on and figure out as I go.
+type UserInputSystem struct {
+	PlayerMovement *MovementComponent
+}
+
+func (uis *UserInputSystem) Update(dt float64) {
+	directionX := 0.0
+	directionY := 0.0
+
+	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		directionX -= 1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) {
+		directionX += 1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
+		directionY -= 1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) {
+		directionY += 1
+	}
+
+	uis.PlayerMovement.Direction.X = directionX
+	uis.PlayerMovement.Direction.Y = directionY
+}
+
+func (uis *UserInputSystem) Attach(mov *MovementComponent) {
+	uis.PlayerMovement = mov
 }

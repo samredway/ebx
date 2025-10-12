@@ -20,6 +20,7 @@ func NewPlayer(
 	rs *engine.RenderSystem,
 	pos *engine.PositionStore,
 	mov *engine.MovementSystem,
+	inp *engine.UserInputSystem,
 ) {
 	// Setup player entity
 	pId := idGen.Next()
@@ -43,8 +44,11 @@ func NewPlayer(
 	// Player movement
 	pMov := &engine.MovementComponent{
 		ComponentBase: engine.ComponentBase{EntityId: pId},
-		Speed:         200.0,
-		Direction:     geom.Vec2{X: 1, Y: 0},
+		Speed:         300.0,
+		Direction:     geom.Vec2{X: 0, Y: 0},
 	}
 	mov.Attach(pMov)
+
+	// Attach Player to the UserInputSystem
+	inp.Attach(pMov)
 }
