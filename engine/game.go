@@ -37,8 +37,7 @@ type Game struct {
 // NewGame returns a Game object that can run in Ebiten.
 // You can must pass in a Scene argument that is your opening scene along with
 // an Assets object which contains all the assets your game requires
-func NewGame(scene Scene, screenW, screenH int) *Game {
-	viewport := geom.Size{W: screenW, H: screenH}
+func NewGame(scene Scene, viewport geom.Size) *Game {
 	scene.SetViewport(viewport)
 	scene.OnEnter()
 	return &Game{

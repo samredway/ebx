@@ -5,6 +5,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/engine"
+	"github.com/samredway/ebx/geom"
 )
 
 const (
@@ -17,7 +18,7 @@ func main() {
 	ebiten.SetWindowTitle("Top down Example")
 	ebiten.SetTPS(60)
 	scene := &ExampleScene{}
-	if err := ebiten.RunGame(engine.NewGame(scene, screenW, screenH)); err != nil {
+	if err := ebiten.RunGame(engine.NewGame(scene, geom.Size{W: screenW, H: screenH})); err != nil {
 		log.Fatal(err)
 	}
 }
