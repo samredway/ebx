@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"image"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/assetmgr"
 	"github.com/samredway/ebx/camera"
@@ -112,7 +114,27 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	pPos := rs.positions.GetPosition(rs.camTarget)
 	rs.camera.CentreOn(pPos.Vec2)
 
-	// TODO: Draw tiles first
+	// Draw tiles first -----
+
+	// Convert camera world coords to tile indices
+	offsetX := int(rs.camera.X)
+	offsetY := int(rs.camera.Y)
+
+	tx0 := offsetX / rs.tiles.TileSize()
+	tx1 := (offsetX+rs.camera.Viewport().W)/rs.tiles.TileSize() + 1
+	ty0 := offsetY / rs.tiles.TileSize()
+	ty1 := (offsetY+rs.camera.Viewport().H)/rs.tiles.TileSize() + 1
+
+	// Just make the rect
+	viewRect := image.Rect(tx0, ty0, tx1, ty1)
+
+	// Iterate layers and render
+	for layer := range rs.tiles.NumLayers() {
+		rs.tiles.ForEachIn(viewRect, layer, func(tx, ty, id int) {
+			// TODO: actually render the tile
+		})
+	}
+	// Draw enitities -----
 
 	for _, r := range rs.components {
 		pos := rs.positions.GetPosition(r.GetEntityId())
@@ -121,8 +143,8 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 
 		imgW := float64(r.Img.Bounds().Dx())
 		imgH := float64(r.Img.Bounds().Dy())
-		viewW := float64(rs.camera.Viewport.W)
-		viewH := float64(rs.camera.Viewport.H)
+		viewW := float64(rs.camera.Viewport().W)
+		viewH := float64(rs.camera.Viewport().H)
 
 		// Skip anything outside the visible screen
 		if screenCoords.X < -imgW || screenCoords.X > viewW ||
