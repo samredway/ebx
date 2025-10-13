@@ -1,7 +1,11 @@
-package assets
+// Package assetmgr provides loading and management of images, sprite sheets,
+// and Tiled (.tmx) maps for use with Ebiten.
+package assetmgr
 
 import (
+	"github.com/Rulox/ebitmx"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/samredway/ebx/geom"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -76,4 +80,38 @@ func loadEbitenImage(path string) *ebiten.Image {
 	}
 
 	return ebiten.NewImageFromImage(img)
+}
+
+// Exportable value from TileMap GetTiles note that tiles loaded in with Assets
+// will be loaded in the same order as by Tiled meaning that the tile_id will
+// match its index in the slice at Assets.tiles[tile_map_name]
+type Tile struct {
+	coords  geom.Vec2
+	layer   int
+	tile_id int
+}
+
+// TileMap represents a whole tilemap - world or level. Currently it is designed
+// to work by loading .tmx files (created in the free and open source Tiled level
+// editor)
+type TileMap struct {
+	tileSize int     // Assume tiles are square
+	mapW     int     // World width in tiles
+	mapH     int     // World height in tiles
+	layers   [][]int // Each layer is flat []int of tiles
+}
+
+// NewTileManager loads in the level as a .tmx file (made in Tiled tile editor)
+func NewTileMap(pathToTmx string, assets Assets) *TileMap {
+	m, err := ebitmx.GetEbitenMap(pathToTmx)
+	if err != nil {
+		panic("Tilemap not found")
+	}
+
+	return &TileMap{
+		tileSize: m.TileHeight, // Assume tiles are square
+		mapW:     m.MapWidth,
+		mapH:     m.MapHeight,
+		layers:   m.Layers,
+	}
 }
