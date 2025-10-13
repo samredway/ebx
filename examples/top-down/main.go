@@ -16,9 +16,9 @@ const (
 func main() {
 	ebiten.SetWindowSize(screenW, screenH)
 	ebiten.SetWindowTitle("Top down Example")
-	ebiten.SetTPS(60)
 	scene := &ExampleScene{}
-	if err := ebiten.RunGame(engine.NewGame(scene, geom.Size{W: screenW, H: screenH})); err != nil {
+	err := ebiten.RunGame(engine.NewGame(scene, geom.Size{W: screenW, H: screenH}))
+	if err != nil {
 		log.Fatal(err)
 	}
 }
