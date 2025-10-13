@@ -2,6 +2,7 @@ package engine
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/samredway/ebx/assetmgr"
 	"github.com/samredway/ebx/camera"
 	"github.com/samredway/ebx/collections"
 	"github.com/samredway/ebx/geom"
@@ -88,32 +89,40 @@ func (sb *SystemBase[C]) Update(dt float64) {
 // RenderSystem gets run in the Scene.Draw() method
 type RenderSystem struct {
 	*SystemBase[*RenderComponent]
-	pos       *PositionStore
-	cam       *camera.Camera
+	positions *PositionStore
+	camera    *camera.Camera
+	tiles     *assetmgr.TileMap
 	camTarget EntityId
 }
 
-func NewRenderSystem(pos *PositionStore, cam *camera.Camera) *RenderSystem {
+func NewRenderSystem(
+	pos *PositionStore,
+	cam *camera.Camera,
+	tiles *assetmgr.TileMap,
+) *RenderSystem {
 	return &RenderSystem{
 		SystemBase: NewSystemBase[*RenderComponent](),
-		pos:        pos,
-		cam:        cam,
+		positions:  pos,
+		camera:     cam,
+		tiles:      tiles,
 	}
 }
 
 func (rs *RenderSystem) Draw(screen *ebiten.Image) {
-	pPos := rs.pos.GetPosition(rs.camTarget)
-	rs.cam.CentreOn(pPos.Vec2)
+	pPos := rs.positions.GetPosition(rs.camTarget)
+	rs.camera.CentreOn(pPos.Vec2)
+
+	// TODO: Draw tiles first
 
 	for _, r := range rs.components {
-		pos := rs.pos.GetPosition(r.GetEntityId())
+		pos := rs.positions.GetPosition(r.GetEntityId())
 		opts := &ebiten.DrawImageOptions{}
-		screenCoords := rs.cam.Apply(pos.Vec2)
+		screenCoords := rs.camera.Apply(pos.Vec2)
 
 		imgW := float64(r.Img.Bounds().Dx())
 		imgH := float64(r.Img.Bounds().Dy())
-		viewW := float64(rs.cam.Viewport.W)
-		viewH := float64(rs.cam.Viewport.H)
+		viewW := float64(rs.camera.Viewport.W)
+		viewH := float64(rs.camera.Viewport.H)
 
 		// Skip anything outside the visible screen
 		if screenCoords.X < -imgW || screenCoords.X > viewW ||
