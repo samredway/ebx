@@ -11,33 +11,33 @@ import (
 
 // ExampleScene is a template for how scene operates with its required hooks
 type ExampleScene struct {
-	Viewport     geom.Size
-	Ids          engine.IdGen
-	Camera       *camera.Camera
-	PosStore     *engine.PositionStore
-	RenderSys    *engine.RenderSystem
-	MoveSys      *engine.MovementSystem
-	UserInputSys *engine.UserInputSystem
-	TileMap      *assetmgr.TileMap
+	viewport     geom.Size
+	ids          engine.IdGen
+	camera       *camera.Camera
+	posStore     *engine.PositionStore
+	renderSys    *engine.RenderSystem
+	moveSys      *engine.MovementSystem
+	userInputSys *engine.UserInputSystem
+	tileMap      *assetmgr.TileMap
 }
 
 // OnEnter is called on each scene load and should be used for setup like creating
 // components and adding them to their relevant systems
 func (es *ExampleScene) OnEnter() {
-	es.Ids = engine.IdGen{}
+	es.ids = engine.IdGen{}
 	// Create a camera with a default worlsize of Viewport for now. When the tile map
 	// is done can add a proper world bounds
-	es.Camera = camera.NewCamera(
-		es.Viewport,
-		image.Rect(0, 0, es.Viewport.W, es.Viewport.H),
+	es.camera = camera.NewCamera(
+		es.viewport,
+		image.Rect(0, 0, es.viewport.W, es.viewport.H),
 	)
-	es.PosStore = engine.NewPositionStore()
-	es.RenderSys = engine.NewRenderSystem(es.PosStore, es.Camera, es.TileMap)
-	es.MoveSys = engine.NewMovementSystem(es.PosStore)
-	es.UserInputSys = &engine.UserInputSystem{}
+	es.posStore = engine.NewPositionStore()
+	es.renderSys = engine.NewRenderSystem(es.posStore, es.camera, es.tileMap)
+	es.moveSys = engine.NewMovementSystem(es.posStore)
+	es.userInputSys = &engine.UserInputSystem{}
 
 	// Create entities
-	NewPlayer(es.Ids, es.RenderSys, es.PosStore, es.MoveSys, es.UserInputSys)
+	NewPlayer(es.ids, es.renderSys, es.posStore, es.moveSys, es.userInputSys)
 }
 
 // OnExit is called when the scene is removed from current and allows exit transitions
@@ -46,18 +46,18 @@ func (es *ExampleScene) OnExit() {}
 
 // Update us used primarily to run the relevant systems update methods
 func (es *ExampleScene) Update(dt float64) engine.Scene {
-	es.UserInputSys.Update(dt)
-	es.MoveSys.Update(dt)
-	es.RenderSys.Update(dt)
+	es.userInputSys.Update(dt)
+	es.moveSys.Update(dt)
+	es.renderSys.Update(dt)
 	return nil
 }
 
 // Draw will primarily run the scenes systems Draw methods
 func (es *ExampleScene) Draw(screen *ebiten.Image) {
-	es.RenderSys.Draw(screen)
+	es.renderSys.Draw(screen)
 }
 
 // Set the view port size
 func (es *ExampleScene) SetViewport(view geom.Size) {
-	es.Viewport = view
+	es.viewport = view
 }
