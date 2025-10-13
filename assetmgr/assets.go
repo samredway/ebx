@@ -3,6 +3,7 @@
 package assetmgr
 
 import (
+	"fmt"
 	"github.com/Rulox/ebitmx"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/geom"
@@ -82,27 +83,17 @@ func loadEbitenImage(path string) *ebiten.Image {
 	return ebiten.NewImageFromImage(img)
 }
 
-// Exportable value from TileMap GetTiles note that tiles loaded in with Assets
-// will be loaded in the same order as by Tiled meaning that the tile_id will
-// match its index in the slice at Assets.tiles[tile_map_name]
-type Tile struct {
-	coords  geom.Vec2
-	layer   int
-	tile_id int
-}
-
 // TileMap represents a whole tilemap - world or level. Currently it is designed
 // to work by loading .tmx files (created in the free and open source Tiled level
 // editor)
 type TileMap struct {
-	tileSize int     // Assume tiles are square
-	mapW     int     // World width in tiles
-	mapH     int     // World height in tiles
-	layers   [][]int // Each layer is flat []int of tiles
+	tileSize int       // Assume tiles are square
+	mapSize  geom.Size // World width and height in tiles
+	layers   [][]int   // Each layer is flat []int of tiles
 }
 
-// NewTileManager loads in the level as a .tmx file (made in Tiled tile editor)
-func NewTileMap(pathToTmx string, assets Assets) *TileMap {
+// NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
+func NewTileMapFromTmx(pathToTmx string, assets Assets) *TileMap {
 	m, err := ebitmx.GetEbitenMap(pathToTmx)
 	if err != nil {
 		panic("Tilemap not found")
@@ -110,8 +101,46 @@ func NewTileMap(pathToTmx string, assets Assets) *TileMap {
 
 	return &TileMap{
 		tileSize: m.TileHeight, // Assume tiles are square
-		mapW:     m.MapWidth,
-		mapH:     m.MapHeight,
+		mapSize:  geom.Size{W: m.MapWidth, H: m.MapHeight},
 		layers:   m.Layers,
+	}
+}
+
+func (tm *TileMap) TileSize() int      { return tm.tileSize }
+func (tm *TileMap) NumLayers() int     { return len(tm.layers) }
+func (tm *TileMap) MapSize() geom.Size { return tm.mapSize }
+
+// ForEachIn allows user to run a function (for example to render) each tile within
+// the bounds (in terms of tilesx and tilesy coords) of a rect
+func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id int)) {
+	if layer < 0 || layer >= len(tm.layers) {
+		panic(fmt.Sprintf("invalid layer index: %d", layer))
+	}
+
+	// clamp to map bounds
+	if area.Min.X < 0 {
+		area.Min.X = 0
+	}
+	if area.Min.Y < 0 {
+		area.Min.Y = 0
+	}
+	if area.Max.X > tm.mapSize.W {
+		area.Max.X = tm.mapSize.W
+	}
+	if area.Max.Y > tm.mapSize.H {
+		area.Max.Y = tm.mapSize.H
+	}
+
+	data := tm.layers[layer]
+	w := tm.mapSize.W
+	for ty := area.Min.Y; ty < area.Max.Y; ty++ {
+		row := ty * w
+		for tx := area.Min.X; tx < area.Max.X; tx++ {
+			id := data[row+tx]
+			if id == 0 {
+				continue
+			}
+			fn(tx, ty, id)
+		}
 	}
 }
