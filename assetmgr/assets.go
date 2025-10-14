@@ -111,6 +111,9 @@ func loadEbitenImage(fsys fs.FS, path string) *ebiten.Image {
 // TileMap represents a whole tilemap - world or level. Currently it is designed
 // to work by loading .tmx files (created in the free and open source Tiled level
 // editor)
+// Note that Assets.tiles[name] will load tiles in the same order as Tiled, however
+// tiled uses ids from 1 not 0 so the ids of the tiles in each layer will be the
+// same as the index + 1 in Assets.tiles
 type TileMap struct {
 	tileSize int       // Assume tiles are square
 	mapSize  geom.Size // World width and height in tiles

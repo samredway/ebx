@@ -138,7 +138,7 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 				X: float64(tx * rs.tileMap.TileSize()),
 				Y: float64(ty * rs.tileMap.TileSize()),
 			}
-			img := rs.tileSet[id]
+			img := rs.tileSet[id-1]
 			rs.drawToScreen(worldCoords, img, screen)
 		})
 	}
