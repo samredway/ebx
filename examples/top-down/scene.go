@@ -28,19 +28,31 @@ type ExampleScene struct {
 // components and adding them to their relevant systems
 func (es *ExampleScene) OnEnter() {
 	es.ids = engine.IdGen{}
-	// Create a camera with a default worldsize of Viewport for now. When the tile map
-	// is done can add a proper world bounds
-	es.camera = camera.NewCamera(
-		es.viewport,
-		image.Rect(0, 0, es.viewport.W, es.viewport.H),
-	)
 	es.posStore = engine.NewPositionStore()
 
 	// Load assets
 	es.assets = assetmgr.NewAssets()
-	es.assets.LoadTileSetFromFS(gameassets.GameFS, "DungeonTiles", "DungeonTiles.png", 16)
+	es.assets.LoadTileSetFromFS(gameassets.GameFS, "DungeonTiles", "DungeonTiles.png", 32)
 	es.tileMap = assetmgr.NewTileMapFromTmx(gameassets.GameFS, "example.tmx", *es.assets)
-	es.renderSys = engine.NewRenderSystem(es.posStore, es.camera, es.tileMap, es.assets.GetTileSet("DungeonTiles"))
+
+	// Setup camera
+	es.camera = camera.NewCamera(
+		es.viewport,
+		image.Rect(
+			0,
+			0,
+			es.tileMap.MapSize().W*es.tileMap.TileSize(),
+			es.tileMap.MapSize().H*es.tileMap.TileSize(),
+		),
+	)
+
+	// Setup core systems
+	es.renderSys = engine.NewRenderSystem(
+		es.posStore,
+		es.camera,
+		es.tileMap,
+		es.assets.GetTileSet("DungeonTiles"),
+	)
 	es.moveSys = engine.NewMovementSystem(es.posStore)
 	es.userInputSys = &engine.UserInputSystem{}
 
