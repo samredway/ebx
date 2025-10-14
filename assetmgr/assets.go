@@ -1,16 +1,34 @@
-// Package assetmgr provides loading and management of images, sprite sheets,
-// and Tiled (.tmx) maps for use with Ebiten.
+// Package assetmgr provides functions for loading and managing images,
+// sprite sheets, and Tiled (.tmx) maps for use with Ebiten.
+//
+// It expects your assets to be embedded in the binary and accepts any io/fs.FS
+// implementation to locate and read those files. For quick testing, you can
+// use the default filesystem by passing os.DirFS(".").
+//
+// A typical setup for embedding looks like this:
+//
+//	package assets
+//
+//	import "embed"
+//
+//	//go:embed *.tmx *.png
+//	var GameFS embed.FS
+//
+// You can then pass assets.GameFS to the assetmgr functions when loading data.
+
 package assetmgr
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/Rulox/ebitmx"
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/samredway/ebx/geom"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"os"
+	"io/fs"
+
+	"github.com/Rulox/ebitmx"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/samredway/ebx/geom"
 )
 
 type Assets struct {
@@ -39,13 +57,21 @@ func (a *Assets) AddImage(imgName string, img *ebiten.Image) {
 	a.imgs[imgName] = img
 }
 
-func (a *Assets) LoadTileSetFromPath(name, path string, tileSize int) {
-	sheet := loadEbitenImage(path)
+func (a *Assets) LoadTileSetFromFS(fsys fs.FS, name, path string, tileSize int) {
+	sheet := loadEbitenImage(fsys, path)
 	a.tiles[name] = splitSheet(sheet, tileSize)
 }
 
-func (a *Assets) LoadSpriteSheetFromPath(name, path string, frameSize int) {
-	sheet := loadEbitenImage(path)
+func (a *Assets) GetTileSet(name string) []*ebiten.Image {
+	tileSet, ok := a.tiles[name]
+	if !ok {
+		panic(fmt.Sprintf("No tileset with name %s", name))
+	}
+	return tileSet
+}
+
+func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, name, path string, frameSize int) {
+	sheet := loadEbitenImage(fsys, path)
 	a.sprites[name] = splitSheet(sheet, frameSize)
 }
 
@@ -68,16 +94,15 @@ func splitSheet(sheet *ebiten.Image, frameSize int) []*ebiten.Image {
 	return tiles
 }
 
-func loadEbitenImage(path string) *ebiten.Image {
-	f, err := os.Open(path)
+func loadEbitenImage(fsys fs.FS, path string) *ebiten.Image {
+	f, err := fs.ReadFile(fsys, path)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("Unable to load file from path %s got ERROR: %v", path, err))
 	}
-	defer f.Close()
 
-	img, _, err := image.Decode(f)
+	img, _, err := image.Decode(bytes.NewReader(f))
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("Unable to decode bytes for image %s ERROR: %v", path, err))
 	}
 
 	return ebiten.NewImageFromImage(img)
@@ -93,10 +118,10 @@ type TileMap struct {
 }
 
 // NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
-func NewTileMapFromTmx(pathToTmx string, assets Assets) *TileMap {
-	m, err := ebitmx.GetEbitenMap(pathToTmx)
+func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets Assets) *TileMap {
+	m, err := ebitmx.GetEbitenMapFromFS(fsys, pathToTmx)
 	if err != nil {
-		panic("Tilemap not found")
+		panic(fmt.Sprintf("Tilemap not found with at path %s", pathToTmx))
 	}
 
 	return &TileMap{

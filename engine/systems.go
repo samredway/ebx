@@ -93,20 +93,23 @@ type RenderSystem struct {
 	*SystemBase[*RenderComponent]
 	positions *PositionStore
 	camera    *camera.Camera
-	tiles     *assetmgr.TileMap
+	tileMap   *assetmgr.TileMap
+	tileSet   []*ebiten.Image
 	camTarget EntityId
 }
 
 func NewRenderSystem(
 	pos *PositionStore,
 	cam *camera.Camera,
-	tiles *assetmgr.TileMap,
+	tileMap *assetmgr.TileMap,
+	tileSet []*ebiten.Image,
 ) *RenderSystem {
 	return &RenderSystem{
 		SystemBase: NewSystemBase[*RenderComponent](),
 		positions:  pos,
 		camera:     cam,
-		tiles:      tiles,
+		tileMap:    tileMap,
+		tileSet:    tileSet,
 	}
 }
 
@@ -116,45 +119,59 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 
 	// Draw tiles first -----
 
-	// Convert camera world coords to tile indices
+	// Find the rectangle that the viewport covers as a rect on the tileMap
+	// by coverting world cooridanates to tile coords
 	offsetX := int(rs.camera.X)
 	offsetY := int(rs.camera.Y)
 
-	tx0 := offsetX / rs.tiles.TileSize()
-	tx1 := (offsetX+rs.camera.Viewport().W)/rs.tiles.TileSize() + 1
-	ty0 := offsetY / rs.tiles.TileSize()
-	ty1 := (offsetY+rs.camera.Viewport().H)/rs.tiles.TileSize() + 1
+	tx0 := offsetX / rs.tileMap.TileSize()
+	tx1 := (offsetX+rs.camera.Viewport().W)/rs.tileMap.TileSize() + 1
+	ty0 := offsetY / rs.tileMap.TileSize()
+	ty1 := (offsetY+rs.camera.Viewport().H)/rs.tileMap.TileSize() + 1
 
-	// Just make the rect
 	viewRect := image.Rect(tx0, ty0, tx1, ty1)
 
 	// Iterate layers and render
-	for layer := range rs.tiles.NumLayers() {
-		rs.tiles.ForEachIn(viewRect, layer, func(tx, ty, id int) {
-			// TODO: actually render the tile
+	for layer := range rs.tileMap.NumLayers() {
+		rs.tileMap.ForEachIn(viewRect, layer, func(tx, ty, id int) {
+			worldCoords := geom.Vec2{
+				X: float64(tx * rs.tileMap.TileSize()),
+				Y: float64(ty * rs.tileMap.TileSize()),
+			}
+			img := rs.tileSet[id]
+			rs.drawToScreen(worldCoords, img, screen)
 		})
 	}
+
 	// Draw enitities -----
 
 	for _, r := range rs.components {
 		pos := rs.positions.GetPosition(r.GetEntityId())
-		opts := &ebiten.DrawImageOptions{}
-		screenCoords := rs.camera.Apply(pos.Vec2)
-
-		imgW := float64(r.Img.Bounds().Dx())
-		imgH := float64(r.Img.Bounds().Dy())
-		viewW := float64(rs.camera.Viewport().W)
-		viewH := float64(rs.camera.Viewport().H)
-
-		// Skip anything outside the visible screen
-		if screenCoords.X < -imgW || screenCoords.X > viewW ||
-			screenCoords.Y < -imgH || screenCoords.Y > viewH {
-			continue
-		}
-
-		opts.GeoM.Translate(screenCoords.X, screenCoords.Y)
-		screen.DrawImage(r.Img, opts)
+		rs.drawToScreen(pos.Vec2, r.Img, screen)
 	}
+}
+
+func (rs *RenderSystem) drawToScreen(
+	worldCoords geom.Vec2,
+	img *ebiten.Image,
+	screen *ebiten.Image,
+) {
+	screenCoords := rs.camera.Apply(worldCoords)
+	imgW := float64(img.Bounds().Dx())
+	imgH := float64(img.Bounds().Dy())
+	viewW := float64(rs.camera.Viewport().W)
+	viewH := float64(rs.camera.Viewport().H)
+
+	// Skip anything outside the visible screen
+	if screenCoords.X < -imgW || screenCoords.X > viewW ||
+		screenCoords.Y < -imgH || screenCoords.Y > viewH {
+		return
+	}
+
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(screenCoords.X, screenCoords.Y)
+	screen.DrawImage(img, opts)
+
 }
 
 func (rs *RenderSystem) SetCamTarget(id EntityId) {
