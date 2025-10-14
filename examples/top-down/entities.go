@@ -26,7 +26,7 @@ func NewPlayer(
 	pId := idGen.Next()
 
 	// Player Image
-	pImg := ebiten.NewImage(30, 30)
+	pImg := ebiten.NewImage(15, 15)
 	pImg.Fill(color.RGBA{80, 200, 120, 255})
 	pRc := &engine.RenderComponent{
 		ComponentBase: engine.ComponentBase{EntityId: pId},

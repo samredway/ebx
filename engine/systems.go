@@ -144,7 +144,6 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw enitities -----
-
 	for _, r := range rs.components {
 		pos := rs.positions.GetPosition(r.GetEntityId())
 		rs.drawToScreen(pos.Vec2, r.Img, screen)
@@ -171,7 +170,6 @@ func (rs *RenderSystem) drawToScreen(
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(screenCoords.X, screenCoords.Y)
 	screen.DrawImage(img, opts)
-
 }
 
 func (rs *RenderSystem) SetCamTarget(id EntityId) {
