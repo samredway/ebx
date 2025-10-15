@@ -205,27 +205,23 @@ func (ms *MovementSystem) Update(dt float64) {
 			X: pos.X + m.Direction.X*m.Speed*dt,
 			Y: pos.Y + m.Direction.Y*m.Speed*dt,
 		}
-		offset := intentToMove
-		if m.Direction.X > 0 {
-			// Add player width to the collsion check
-			offset.X += 32 // TODO: Get actual size
-		}
-		if m.Direction.Y > 0 {
-			// Add player width to the collsion check
-			offset.Y += 32 // TODO: Get actual size
-		}
-		// TODO: We have problems here. The offset is only applied when moveing down for
-		// example, so if you are moving sideways the veritcal offset is not applied and
-		// you can glide through the wall at that angle
-		// A less serious problem is that diagonal movement on a wall stops dead. We
-		// proablby would rather it slides in the diection that is allowed than has no
-		// movement at all.
 
-		// Offset the players size in our calculation
-		intentTileCoords := ms.tileMap.WorldCoordsToTileCoords(offset)
+		intentTileCoords := ms.tileMap.WorldCoordsToTileCoords(intentToMove)
+		offsetX := (pos.W + ms.tileMap.TileSize() - 1) / ms.tileMap.TileSize()
+		offsetY := (pos.H + ms.tileMap.TileSize() - 1) / ms.tileMap.TileSize()
+
+		collisionRect := image.Rect(
+			int(intentTileCoords.X),
+			int(intentTileCoords.Y),
+			int(intentTileCoords.X)+offsetX,
+			int(intentTileCoords.Y)+offsetY,
+		)
 
 		// Check bounds and update player position
-		if ms.tileMap.IsColliding(intentTileCoords, ms.collisionLayer) {
+		if ms.tileMap.IsColliding(collisionRect, ms.collisionLayer) {
+			// TODO: This means player stops dead on collison which feels bad if you
+			// are going diagonal and hit a wall - you want to slide along the wall
+			// in this case
 			return
 		}
 		pos.Vec2 = intentToMove

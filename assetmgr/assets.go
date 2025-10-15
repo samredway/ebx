@@ -141,17 +141,34 @@ func (tm *TileMap) MapSize() geom.Size { return tm.mapSize }
 // IsColliding checks if the given coordinates are in world bounds (assumes a
 // collision if an out of bounds coord is given) or if there is a tile of this
 // layer that is at this tile mape coord
-func (tm *TileMap) IsColliding(coords geom.Vec2I, layer int) bool {
+func (tm *TileMap) IsColliding(collRect image.Rectangle, layer int) bool {
 	// check world bounds
-	if coords.X < 0 || coords.X > tm.mapSize.W {
+	if collRect.Min.X < 0 || collRect.Max.X > tm.mapSize.W {
 		return true
 	}
-	if coords.Y < 0 || coords.Y > tm.mapSize.H {
+	if collRect.Min.Y < 0 || collRect.Max.Y > tm.mapSize.H {
 		return true
 	}
-	// find the index of the tile and check if it is 0
-	index := coords.Y*tm.mapSize.W + coords.X
-	if tm.layers[layer][index] != 0 {
+	// find overlapping tiles that have non 0 values
+
+	// TOP LEFT can only collide with upper and left tiles
+	tl := collRect.Min.Y*tm.mapSize.W + collRect.Min.X
+	if tm.layers[layer][tl] != 0 {
+		return true
+	}
+	// TOP RIGHT can only collide with up and right tiles
+	tr := collRect.Min.Y*tm.mapSize.W + collRect.Max.X
+	if tm.layers[layer][tr] != 0 {
+		return true
+	}
+	// BOTTOM LEFT can only collide with upper and left tiles
+	bl := collRect.Max.Y*tm.mapSize.W + collRect.Min.X
+	if tm.layers[layer][bl] != 0 {
+		return true
+	}
+	// BOTTOM RIGHT can only collide with up and right tiles
+	br := collRect.Max.Y*tm.mapSize.W + collRect.Max.X
+	if tm.layers[layer][br] != 0 {
 		return true
 	}
 	return false

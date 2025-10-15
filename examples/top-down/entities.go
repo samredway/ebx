@@ -38,6 +38,7 @@ func NewPlayer(
 	pPos := &engine.PositionComponent{
 		ComponentBase: engine.ComponentBase{EntityId: pId},
 		Vec2:          geom.Vec2{X: 100, Y: 100},
+		Size:          geom.Size{W: 32, H: 32},
 	}
 	pos.Attach(pPos)
 

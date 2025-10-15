@@ -24,7 +24,8 @@ func (cb ComponentBase) GetEntityId() EntityId {
 // PositionComponent holds entity's position coords only
 type PositionComponent struct {
 	ComponentBase
-	geom.Vec2
+	geom.Vec2 // X, Y
+	geom.Size // W, H
 }
 
 // MovementComponent holds entity's velocity
