@@ -142,7 +142,6 @@ func (tm *TileMap) MapSize() geom.Size { return tm.mapSize }
 // collision if an out of bounds coord is given) or if there is a tile of this
 // layer that is at this tile mape coord
 func (tm *TileMap) IsColliding(coords geom.Vec2I, layer int) bool {
-
 	// check world bounds
 	if coords.X < 0 || coords.X > tm.mapSize.W {
 		return true
@@ -150,7 +149,11 @@ func (tm *TileMap) IsColliding(coords geom.Vec2I, layer int) bool {
 	if coords.Y < 0 || coords.Y > tm.mapSize.H {
 		return true
 	}
-	// TODO: Check if tile exists at that location on the given layer
+	// find the index of the tile and check if it is 0
+	index := coords.Y*tm.mapSize.W + coords.X
+	if tm.layers[layer][index] != 0 {
+		return true
+	}
 	return false
 }
 

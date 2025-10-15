@@ -205,7 +205,18 @@ func (ms *MovementSystem) Update(dt float64) {
 			X: pos.X + m.Direction.X*m.Speed*dt,
 			Y: pos.Y + m.Direction.Y*m.Speed*dt,
 		}
-		intentTileCoords := ms.tileMap.WorldCoordsToTileCoords(intentToMove)
+		offset := intentToMove
+		if m.Direction.X > 0 {
+			// Add player width to the collsion check
+			offset.X += 32 // TODO: Get actual size
+		}
+		if m.Direction.Y > 0 {
+			// Add player width to the collsion check
+			offset.Y += 32 // TODO: Get actual size
+		}
+
+		// Offset the players size in our calculation
+		intentTileCoords := ms.tileMap.WorldCoordsToTileCoords(offset)
 
 		// Check bounds and update player position
 		if ms.tileMap.IsColliding(intentTileCoords, ms.collisionLayer) {
