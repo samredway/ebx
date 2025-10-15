@@ -214,6 +214,12 @@ func (ms *MovementSystem) Update(dt float64) {
 			// Add player width to the collsion check
 			offset.Y += 32 // TODO: Get actual size
 		}
+		// TODO: We have problems here. The offset is only applied when moveing down for
+		// example, so if you are moving sideways the veritcal offset is not applied and
+		// you can glide through the wall at that angle
+		// A less serious problem is that diagonal movement on a wall stops dead. We
+		// proablby would rather it slides in the diection that is allowed than has no
+		// movement at all.
 
 		// Offset the players size in our calculation
 		intentTileCoords := ms.tileMap.WorldCoordsToTileCoords(offset)
