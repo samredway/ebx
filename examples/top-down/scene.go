@@ -2,13 +2,14 @@ package main
 
 import (
 	_ "embed"
+	"image"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/assetmgr"
 	"github.com/samredway/ebx/camera"
 	"github.com/samredway/ebx/engine"
 	gameassets "github.com/samredway/ebx/examples/top-down/assets"
 	"github.com/samredway/ebx/geom"
-	"image"
 )
 
 // ExampleScene is a template for how scene operates with its required hooks
@@ -32,8 +33,17 @@ func (es *ExampleScene) OnEnter() {
 
 	// Load assets
 	es.assets = assetmgr.NewAssets()
-	es.assets.LoadTileSetFromFS(gameassets.GameFS, "DungeonTiles", "DungeonTiles.png", 32)
-	es.tileMap = assetmgr.NewTileMapFromTmx(gameassets.GameFS, "example.tmx", *es.assets)
+	es.assets.LoadTileSetFromFS(
+		gameassets.GameFS,
+		"DungeonTiles",
+		"DungeonTiles.png",
+		32,
+	)
+	es.tileMap = assetmgr.NewTileMapFromTmx(
+		gameassets.GameFS,
+		"example.tmx",
+		*es.assets,
+	)
 
 	// Setup camera
 	es.camera = camera.NewCamera(
@@ -53,7 +63,7 @@ func (es *ExampleScene) OnEnter() {
 		es.tileMap,
 		es.assets.GetTileSet("DungeonTiles"),
 	)
-	es.moveSys = engine.NewMovementSystem(es.posStore)
+	es.moveSys = engine.NewMovementSystem(es.posStore, es.tileMap, 1)
 	es.userInputSys = &engine.UserInputSystem{}
 
 	// Create entities

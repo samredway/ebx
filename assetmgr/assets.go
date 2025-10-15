@@ -138,6 +138,29 @@ func (tm *TileMap) TileSize() int      { return tm.tileSize }
 func (tm *TileMap) NumLayers() int     { return len(tm.layers) }
 func (tm *TileMap) MapSize() geom.Size { return tm.mapSize }
 
+// IsColliding checks if the given coordinates are in world bounds (assumes a
+// collision if an out of bounds coord is given) or if there is a tile of this
+// layer that is at this tile mape coord
+func (tm *TileMap) IsColliding(coords geom.Vec2I, layer int) bool {
+
+	// check world bounds
+	if coords.X < 0 || coords.X > tm.mapSize.W {
+		return true
+	}
+	if coords.Y < 0 || coords.Y > tm.mapSize.H {
+		return true
+	}
+	// TODO: Check if tile exists at that location on the given layer
+	return false
+}
+
+func (tm *TileMap) WorldCoordsToTileCoords(wc geom.Vec2) geom.Vec2I {
+	return geom.Vec2I{
+		X: int(wc.X / float64(tm.tileSize)),
+		Y: int(wc.Y / float64(tm.tileSize)),
+	}
+}
+
 // ForEachIn allows user to run a function (for example to render) each tile within
 // the bounds (in terms of tilesx and tilesy coords) of a rect
 func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id int)) {

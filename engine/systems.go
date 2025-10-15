@@ -180,24 +180,38 @@ func (rs *RenderSystem) SetCamTarget(id EntityId) {
 // based on movement data
 type MovementSystem struct {
 	*SystemBase[*MovementComponent]
-	pos *PositionStore
+	pos            *PositionStore
+	tileMap        *assetmgr.TileMap
+	collisionLayer int // TODO: crude to pass this here? thinking ...
 }
 
-func NewMovementSystem(pos *PositionStore) *MovementSystem {
+func NewMovementSystem(pos *PositionStore, tileMap *assetmgr.TileMap, collLayer int) *MovementSystem {
 	return &MovementSystem{
-		SystemBase: NewSystemBase[*MovementComponent](),
-		pos:        pos,
+		SystemBase:     NewSystemBase[*MovementComponent](),
+		pos:            pos,
+		tileMap:        tileMap,
+		collisionLayer: collLayer,
 	}
 }
 
 func (ms *MovementSystem) Update(dt float64) {
 	ms.SystemBase.Update(dt)
-
 	for _, m := range ms.components {
 		pos := ms.pos.GetPosition(m.GetEntityId())
 		m.Direction = geom.Normalize(m.Direction)
-		pos.X += m.Direction.X * m.Speed * dt
-		pos.Y += m.Direction.Y * m.Speed * dt
+
+		// calculate intent so we can check if it will remain in bounds
+		intentToMove := geom.Vec2{
+			X: pos.X + m.Direction.X*m.Speed*dt,
+			Y: pos.Y + m.Direction.Y*m.Speed*dt,
+		}
+		intentTileCoords := ms.tileMap.WorldCoordsToTileCoords(intentToMove)
+
+		// Check bounds and update player position
+		if ms.tileMap.IsColliding(intentTileCoords, ms.collisionLayer) {
+			return
+		}
+		pos.Vec2 = intentToMove
 	}
 }
 

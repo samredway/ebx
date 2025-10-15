@@ -17,4 +17,6 @@ func Normalize(vec Vec2) Vec2 {
 	}
 }
 
+type Vec2I struct{ X, Y int }
+
 type Size struct{ W, H int }
