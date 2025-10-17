@@ -2,6 +2,7 @@ package engine
 
 import (
 	"image"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/assetmgr"
@@ -9,6 +10,10 @@ import (
 	"github.com/samredway/ebx/collections"
 	"github.com/samredway/ebx/geom"
 )
+
+// collisionEpsilon is a tiny offset to prevent floating-point precision issues
+// when resolving collisions, avoiding player jitter against walls.
+const collisionEpsilon = 0.001
 
 // PositionStore has no update but acts as a store for position component
 // that gets updated by movement system and read from by some others like
@@ -196,36 +201,82 @@ func NewMovementSystem(pos *PositionStore, tileMap *assetmgr.TileMap, collLayer 
 
 func (ms *MovementSystem) Update(dt float64) {
 	ms.SystemBase.Update(dt)
+
+	ts := float64(ms.tileMap.TileSize())
+
 	for _, m := range ms.components {
 		pos := ms.pos.GetPosition(m.GetEntityId())
-		m.Direction = geom.Normalize(m.Direction)
 
-		// calculate intent so we can check if it will remain in bounds
-		intentToMove := geom.Vec2{
-			X: pos.X + m.Direction.X*m.Speed*dt,
-			Y: pos.Y + m.Direction.Y*m.Speed*dt,
-		}
+		dir := geom.Normalize(m.Direction)
+		dx := dir.X * m.Speed * dt
+		dy := dir.Y * m.Speed * dt
 
-		intentTileCoords := ms.tileMap.WorldCoordsToTileCoords(intentToMove)
-		offsetX := (pos.W + ms.tileMap.TileSize() - 1) / ms.tileMap.TileSize()
-		offsetY := (pos.H + ms.tileMap.TileSize() - 1) / ms.tileMap.TileSize()
-
-		collisionRect := image.Rect(
-			int(intentTileCoords.X),
-			int(intentTileCoords.Y),
-			int(intentTileCoords.X)+offsetX,
-			int(intentTileCoords.Y)+offsetY,
-		)
-
-		// Check bounds and update player position
-		if ms.tileMap.IsColliding(collisionRect, ms.collisionLayer) {
-			// TODO: This means player stops dead on collison which feels bad if you
-			// are going diagonal and hit a wall - you want to slide along the wall
-			// in this case
-			return
-		}
-		pos.Vec2 = intentToMove
+		// move X, then Y (axis-separated → natural sliding)
+		pos.X, pos.Y = ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, ts)
+		pos.X, pos.Y = ms.resolveYAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dy, ts)
 	}
+}
+
+// resolveXAxis moves along the X axis and clamps on collision.
+// It uses "predict and correct" logic:
+//  1. Calculate the new position (newX) after moving by dx
+//  2. Check if that position would overlap any tiles
+//  3. If yes, "push back" to the edge of the blocking tile
+// Returns the resolved (x, y) position.
+func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileSize float64) (float64, float64) {
+	// Try to move to the new X position
+	newX := posX + dx
+	
+	if ms.tileMap.OverlapsTiles(newX, posY, w, h, ms.collisionLayer) {
+		// We hit something! Need to push back to the edge of the blocking tile
+		
+		if dx > 0 {
+			// Moving RIGHT - find the right edge of the entity and which tile column it's in
+			rightEdge := newX + w
+			blockingTileCol := math.Floor(rightEdge / tileSize)
+			// Push back: left edge of blocking tile minus our width minus safety gap
+			newX = blockingTileCol*tileSize - w - collisionEpsilon
+			
+		} else if dx < 0 {
+			// Moving LEFT - find which tile column our left edge is in
+			blockingTileCol := math.Floor(newX / tileSize)
+			// Push back: right edge of blocking tile plus safety gap
+			newX = (blockingTileCol+1)*tileSize + collisionEpsilon
+		}
+	}
+	
+	return newX, posY
+}
+
+// resolveYAxis moves along the Y axis and clamps on collision.
+// It uses "predict and correct" logic:
+//  1. Calculate the new position (newY) after moving by dy
+//  2. Check if that position would overlap any tiles
+//  3. If yes, "push back" to the edge of the blocking tile
+// Returns the resolved (x, y) position.
+func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileSize float64) (float64, float64) {
+	// Try to move to the new Y position
+	newY := posY + dy
+	
+	if ms.tileMap.OverlapsTiles(posX, newY, w, h, ms.collisionLayer) {
+		// We hit something! Need to push back to the edge of the blocking tile
+		
+		if dy > 0 {
+			// Moving DOWN - find the bottom edge of the entity and which tile row it's in
+			bottomEdge := newY + h
+			blockingTileRow := math.Floor(bottomEdge / tileSize)
+			// Push back: top edge of blocking tile minus our height minus safety gap
+			newY = blockingTileRow*tileSize - h - collisionEpsilon
+			
+		} else if dy < 0 {
+			// Moving UP - find which tile row our top edge is in
+			blockingTileRow := math.Floor(newY / tileSize)
+			// Push back: bottom edge of blocking tile plus safety gap
+			newY = (blockingTileRow+1)*tileSize + collisionEpsilon
+		}
+	}
+	
+	return posX, newY
 }
 
 // InputSystem handles user input and applies it to a given movement component

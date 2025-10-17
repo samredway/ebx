@@ -25,6 +25,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io/fs"
+	"math"
 
 	"github.com/Rulox/ebitmx"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -138,38 +139,44 @@ func (tm *TileMap) TileSize() int      { return tm.tileSize }
 func (tm *TileMap) NumLayers() int     { return len(tm.layers) }
 func (tm *TileMap) MapSize() geom.Size { return tm.mapSize }
 
-// IsColliding checks if the given coordinates are in world bounds (assumes a
-// collision if an out of bounds coord is given) or if there is a tile of this
-// layer that is at this tile mape coord
-func (tm *TileMap) IsColliding(collRect image.Rectangle, layer int) bool {
-	// check world bounds
-	if collRect.Min.X < 0 || collRect.Max.X > tm.mapSize.W {
-		return true
+func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) bool {
+	if layer < 0 || layer >= len(tm.layers) {
+		panic("invalid layer")
 	}
-	if collRect.Min.Y < 0 || collRect.Max.Y > tm.mapSize.H {
-		return true
-	}
-	// find overlapping tiles that have non 0 values
 
-	// TOP LEFT can only collide with upper and left tiles
-	tl := collRect.Min.Y*tm.mapSize.W + collRect.Min.X
-	if tm.layers[layer][tl] != 0 {
+	ts := float64(tm.TileSize())
+
+	tx0 := int(math.Floor(x / ts))
+	ty0 := int(math.Floor(y / ts))
+	tx1 := int(math.Floor((x+w-1)/ts)) + 1 // exclusive Max
+	ty1 := int(math.Floor((y+h-1)/ts)) + 1
+
+	// outside = collide with world bounds
+	if tx1 <= 0 || ty1 <= 0 || tx0 >= tm.mapSize.W || ty0 >= tm.mapSize.H {
 		return true
 	}
-	// TOP RIGHT can only collide with up and right tiles
-	tr := collRect.Min.Y*tm.mapSize.W + collRect.Max.X
-	if tm.layers[layer][tr] != 0 {
-		return true
+	if tx0 < 0 {
+		tx0 = 0
 	}
-	// BOTTOM LEFT can only collide with upper and left tiles
-	bl := collRect.Max.Y*tm.mapSize.W + collRect.Min.X
-	if tm.layers[layer][bl] != 0 {
-		return true
+	if ty0 < 0 {
+		ty0 = 0
 	}
-	// BOTTOM RIGHT can only collide with up and right tiles
-	br := collRect.Max.Y*tm.mapSize.W + collRect.Max.X
-	if tm.layers[layer][br] != 0 {
-		return true
+	if tx1 > tm.mapSize.W {
+		tx1 = tm.mapSize.W
+	}
+	if ty1 > tm.mapSize.H {
+		ty1 = tm.mapSize.H
+	}
+
+	rowW := tm.mapSize.W
+	data := tm.layers[layer]
+	for ty := ty0; ty < ty1; ty++ {
+		base := ty * rowW
+		for tx := tx0; tx < tx1; tx++ {
+			if data[base+tx] != 0 {
+				return true
+			}
+		}
 	}
 	return false
 }
