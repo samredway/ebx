@@ -2,5 +2,5 @@ package assets
 
 import "embed"
 
-//go:embed *.tmx *.png
+//go:embed *.tmx *.tsx *.png
 var GameFS embed.FS

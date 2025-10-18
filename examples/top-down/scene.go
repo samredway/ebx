@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 	"image"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -31,20 +32,17 @@ func (es *ExampleScene) OnEnter() {
 	es.ids = engine.IdGen{}
 	es.posStore = engine.NewPositionStore()
 
-	// Load assets
+	// Create assets and load tilemap (tilemap will load its own tilesets automatically)
 	es.assets = assetmgr.NewAssets()
-	es.assets.LoadTileSetFromFS(
-		gameassets.GameFS,
-		"DungeonTiles",
-		"DungeonTiles.png",
-		32,
-		32,
-	)
-	es.tileMap = assetmgr.NewTileMapFromTmx(
+	tileMap, err := assetmgr.NewTileMapFromTmx(
 		gameassets.GameFS,
 		"example.tmx",
-		*es.assets,
+		es.assets,
 	)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load tilemap: %v", err))
+	}
+	es.tileMap = tileMap
 
 	// Setup camera
 	es.camera = camera.NewCamera(
@@ -56,13 +54,13 @@ func (es *ExampleScene) OnEnter() {
 			es.tileMap.MapSize().H*es.tileMap.TileH(),
 		),
 	)
+	es.camera.Zoom = 2.0
 
 	// Setup core systems
 	es.renderSys = engine.NewRenderSystem(
 		es.posStore,
 		es.camera,
 		es.tileMap,
-		es.assets.GetTileSet("DungeonTiles"),
 	)
 	es.moveSys = engine.NewMovementSystem(es.posStore, es.tileMap, 1)
 	es.userInputSys = &engine.UserInputSystem{}

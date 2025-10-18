@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"image"
 	"math"
 
@@ -99,7 +100,6 @@ type RenderSystem struct {
 	positions *PositionStore
 	camera    *camera.Camera
 	tileMap   *assetmgr.TileMap
-	tileSet   []*ebiten.Image
 	camTarget EntityId
 }
 
@@ -107,14 +107,12 @@ func NewRenderSystem(
 	pos *PositionStore,
 	cam *camera.Camera,
 	tileMap *assetmgr.TileMap,
-	tileSet []*ebiten.Image,
 ) *RenderSystem {
 	return &RenderSystem{
 		SystemBase: NewSystemBase[*RenderComponent](),
 		positions:  pos,
 		camera:     cam,
 		tileMap:    tileMap,
-		tileSet:    tileSet,
 	}
 }
 
@@ -129,23 +127,35 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	offsetX := int(rs.camera.X)
 	offsetY := int(rs.camera.Y)
 
+	// Account for zoom when calculating visible area
+	viewportWorldW := int(float64(rs.camera.Viewport().W) / rs.camera.Zoom)
+	viewportWorldH := int(float64(rs.camera.Viewport().H) / rs.camera.Zoom)
+
 	tx0 := offsetX / rs.tileMap.TileW()
-	tx1 := (offsetX+rs.camera.Viewport().W)/rs.tileMap.TileW() + 1
+	tx1 := (offsetX+viewportWorldW)/rs.tileMap.TileW() + 1
 	ty0 := offsetY / rs.tileMap.TileH()
-	ty1 := (offsetY+rs.camera.Viewport().H)/rs.tileMap.TileH() + 1
+	ty1 := (offsetY+viewportWorldH)/rs.tileMap.TileH() + 1
 
 	viewRect := image.Rect(tx0, ty0, tx1, ty1)
 
 	// Iterate layers and render
 	for layer := range rs.tileMap.NumLayers() {
-		rs.tileMap.ForEachIn(viewRect, layer, func(tx, ty, id int) {
+		err := rs.tileMap.ForEachIn(viewRect, layer, func(tx, ty, id int) {
 			worldCoords := geom.Vec2{
 				X: float64(tx * rs.tileMap.TileW()),
 				Y: float64(ty * rs.tileMap.TileH()),
 			}
-			img := rs.tileSet[id-1]
-			rs.drawToScreen(worldCoords, img, screen)
+			img, err := rs.tileMap.GetImageById(id)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to get tile image for ID %d at (%d, %d): %v", id, tx, ty, err))
+			}
+			if img != nil {
+				rs.drawToScreen(worldCoords, img, screen)
+			}
 		})
+		if err != nil {
+			panic(fmt.Sprintf("Failed to iterate tiles in layer %d: %v", layer, err))
+		}
 	}
 
 	// Draw enitities -----
@@ -161,8 +171,8 @@ func (rs *RenderSystem) drawToScreen(
 	screen *ebiten.Image,
 ) {
 	screenCoords := rs.camera.Apply(worldCoords)
-	imgW := float64(img.Bounds().Dx())
-	imgH := float64(img.Bounds().Dy())
+	imgW := float64(img.Bounds().Dx()) * rs.camera.Zoom
+	imgH := float64(img.Bounds().Dy()) * rs.camera.Zoom
 	viewW := float64(rs.camera.Viewport().W)
 	viewH := float64(rs.camera.Viewport().H)
 
@@ -173,6 +183,7 @@ func (rs *RenderSystem) drawToScreen(
 	}
 
 	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Scale(rs.camera.Zoom, rs.camera.Zoom)
 	opts.GeoM.Translate(screenCoords.X, screenCoords.Y)
 	screen.DrawImage(img, opts)
 }
@@ -223,21 +234,26 @@ func (ms *MovementSystem) Update(dt float64) {
 //  1. Calculate the new position (newX) after moving by dx
 //  2. Check if that position would overlap any tiles
 //  3. If yes, "push back" to the edge of the blocking tile
+//
 // Returns the resolved (x, y) position.
 func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (float64, float64) {
 	// Try to move to the new X position
 	newX := posX + dx
-	
-	if ms.tileMap.OverlapsTiles(newX, posY, w, h, ms.collisionLayer) {
+
+	overlaps, err := ms.tileMap.OverlapsTiles(newX, posY, w, h, ms.collisionLayer)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
+	}
+	if overlaps {
 		// We hit something! Need to push back to the edge of the blocking tile
-		
+
 		if dx > 0 {
 			// Moving RIGHT - find the right edge of the entity and which tile column it's in
 			rightEdge := newX + w
 			blockingTileCol := math.Floor(rightEdge / tileW)
 			// Push back: left edge of blocking tile minus our width minus safety gap
 			newX = blockingTileCol*tileW - w - collisionEpsilon
-			
+
 		} else if dx < 0 {
 			// Moving LEFT - find which tile column our left edge is in
 			blockingTileCol := math.Floor(newX / tileW)
@@ -245,7 +261,7 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (flo
 			newX = (blockingTileCol+1)*tileW + collisionEpsilon
 		}
 	}
-	
+
 	return newX, posY
 }
 
@@ -254,21 +270,26 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (flo
 //  1. Calculate the new position (newY) after moving by dy
 //  2. Check if that position would overlap any tiles
 //  3. If yes, "push back" to the edge of the blocking tile
+//
 // Returns the resolved (x, y) position.
 func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (float64, float64) {
 	// Try to move to the new Y position
 	newY := posY + dy
-	
-	if ms.tileMap.OverlapsTiles(posX, newY, w, h, ms.collisionLayer) {
+
+	overlaps, err := ms.tileMap.OverlapsTiles(posX, newY, w, h, ms.collisionLayer)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
+	}
+	if overlaps {
 		// We hit something! Need to push back to the edge of the blocking tile
-		
+
 		if dy > 0 {
 			// Moving DOWN - find the bottom edge of the entity and which tile row it's in
 			bottomEdge := newY + h
 			blockingTileRow := math.Floor(bottomEdge / tileH)
 			// Push back: top edge of blocking tile minus our height minus safety gap
 			newY = blockingTileRow*tileH - h - collisionEpsilon
-			
+
 		} else if dy < 0 {
 			// Moving UP - find which tile row our top edge is in
 			blockingTileRow := math.Floor(newY / tileH)
@@ -276,7 +297,7 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (flo
 			newY = (blockingTileRow+1)*tileH + collisionEpsilon
 		}
 	}
-	
+
 	return posX, newY
 }
 

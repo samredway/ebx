@@ -26,7 +26,7 @@ func NewPlayer(
 	pId := idGen.Next()
 
 	// Player Image
-	pImg := ebiten.NewImage(32, 32)
+	pImg := ebiten.NewImage(16, 16)
 	pImg.Fill(color.RGBA{80, 200, 120, 255})
 	pRc := &engine.RenderComponent{
 		ComponentBase: engine.ComponentBase{EntityId: pId},
@@ -38,7 +38,7 @@ func NewPlayer(
 	pPos := &engine.PositionComponent{
 		ComponentBase: engine.ComponentBase{EntityId: pId},
 		Vec2:          geom.Vec2{X: 100, Y: 100},
-		Size:          geom.Size{W: 32, H: 32},
+		Size:          geom.Size{W: 16, H: 16},
 	}
 	pos.Attach(pPos)
 
