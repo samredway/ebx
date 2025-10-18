@@ -234,25 +234,26 @@ func (ms *MovementSystem) Update(dt float64) {
 //  1. Calculate the new position (newX) after moving by dx
 //  2. Check if that position would overlap any tiles
 //  3. If yes, "push back" to the edge of the blocking tile
+//
 // Returns the resolved (x, y) position.
 func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (float64, float64) {
 	// Try to move to the new X position
 	newX := posX + dx
-	
+
 	overlaps, err := ms.tileMap.OverlapsTiles(newX, posY, w, h, ms.collisionLayer)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
 	}
 	if overlaps {
 		// We hit something! Need to push back to the edge of the blocking tile
-		
+
 		if dx > 0 {
 			// Moving RIGHT - find the right edge of the entity and which tile column it's in
 			rightEdge := newX + w
 			blockingTileCol := math.Floor(rightEdge / tileW)
 			// Push back: left edge of blocking tile minus our width minus safety gap
 			newX = blockingTileCol*tileW - w - collisionEpsilon
-			
+
 		} else if dx < 0 {
 			// Moving LEFT - find which tile column our left edge is in
 			blockingTileCol := math.Floor(newX / tileW)
@@ -260,7 +261,7 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (flo
 			newX = (blockingTileCol+1)*tileW + collisionEpsilon
 		}
 	}
-	
+
 	return newX, posY
 }
 
@@ -269,25 +270,26 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (flo
 //  1. Calculate the new position (newY) after moving by dy
 //  2. Check if that position would overlap any tiles
 //  3. If yes, "push back" to the edge of the blocking tile
+//
 // Returns the resolved (x, y) position.
 func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (float64, float64) {
 	// Try to move to the new Y position
 	newY := posY + dy
-	
+
 	overlaps, err := ms.tileMap.OverlapsTiles(posX, newY, w, h, ms.collisionLayer)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
 	}
 	if overlaps {
 		// We hit something! Need to push back to the edge of the blocking tile
-		
+
 		if dy > 0 {
 			// Moving DOWN - find the bottom edge of the entity and which tile row it's in
 			bottomEdge := newY + h
 			blockingTileRow := math.Floor(bottomEdge / tileH)
 			// Push back: top edge of blocking tile minus our height minus safety gap
 			newY = blockingTileRow*tileH - h - collisionEpsilon
-			
+
 		} else if dy < 0 {
 			// Moving UP - find which tile row our top edge is in
 			blockingTileRow := math.Floor(newY / tileH)
@@ -295,7 +297,7 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (flo
 			newY = (blockingTileRow+1)*tileH + collisionEpsilon
 		}
 	}
-	
+
 	return posX, newY
 }
 

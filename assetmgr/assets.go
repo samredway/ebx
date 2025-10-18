@@ -197,8 +197,8 @@ func (ts *Tilesets) GetImageForTileId(globalId int) (*ebiten.Image, error) {
 // tiled uses ids from 1 not 0 so the ids of the tiles in each layer will be the
 // same as the index + 1 in Assets.tiles
 type TileMap struct {
-	*ebitmx.EbitenMap      // Embedded map data from ebitmx
-	tilesets      *Tilesets // Tileset manager
+	*ebitmx.EbitenMap           // Embedded map data from ebitmx
+	tilesets          *Tilesets // Tileset manager
 }
 
 // NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
@@ -357,9 +357,9 @@ func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id
 			id := data[row+tx]
 			if id == 0 {
 				continue
+			}
+			fn(tx, ty, id)
 		}
-		fn(tx, ty, id)
 	}
-}
 	return nil
 }
