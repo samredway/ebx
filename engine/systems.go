@@ -129,10 +129,10 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	offsetX := int(rs.camera.X)
 	offsetY := int(rs.camera.Y)
 
-	tx0 := offsetX / rs.tileMap.TileSize()
-	tx1 := (offsetX+rs.camera.Viewport().W)/rs.tileMap.TileSize() + 1
-	ty0 := offsetY / rs.tileMap.TileSize()
-	ty1 := (offsetY+rs.camera.Viewport().H)/rs.tileMap.TileSize() + 1
+	tx0 := offsetX / rs.tileMap.TileW()
+	tx1 := (offsetX+rs.camera.Viewport().W)/rs.tileMap.TileW() + 1
+	ty0 := offsetY / rs.tileMap.TileH()
+	ty1 := (offsetY+rs.camera.Viewport().H)/rs.tileMap.TileH() + 1
 
 	viewRect := image.Rect(tx0, ty0, tx1, ty1)
 
@@ -140,8 +140,8 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	for layer := range rs.tileMap.NumLayers() {
 		rs.tileMap.ForEachIn(viewRect, layer, func(tx, ty, id int) {
 			worldCoords := geom.Vec2{
-				X: float64(tx * rs.tileMap.TileSize()),
-				Y: float64(ty * rs.tileMap.TileSize()),
+				X: float64(tx * rs.tileMap.TileW()),
+				Y: float64(ty * rs.tileMap.TileH()),
 			}
 			img := rs.tileSet[id-1]
 			rs.drawToScreen(worldCoords, img, screen)
@@ -202,7 +202,8 @@ func NewMovementSystem(pos *PositionStore, tileMap *assetmgr.TileMap, collLayer 
 func (ms *MovementSystem) Update(dt float64) {
 	ms.SystemBase.Update(dt)
 
-	ts := float64(ms.tileMap.TileSize())
+	tw := float64(ms.tileMap.TileW())
+	th := float64(ms.tileMap.TileH())
 
 	for _, m := range ms.components {
 		pos := ms.pos.GetPosition(m.GetEntityId())
@@ -212,8 +213,8 @@ func (ms *MovementSystem) Update(dt float64) {
 		dy := dir.Y * m.Speed * dt
 
 		// move X, then Y (axis-separated → natural sliding)
-		pos.X, pos.Y = ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, ts)
-		pos.X, pos.Y = ms.resolveYAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dy, ts)
+		pos.X, pos.Y = ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, tw)
+		pos.X, pos.Y = ms.resolveYAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dy, th)
 	}
 }
 
@@ -223,7 +224,7 @@ func (ms *MovementSystem) Update(dt float64) {
 //  2. Check if that position would overlap any tiles
 //  3. If yes, "push back" to the edge of the blocking tile
 // Returns the resolved (x, y) position.
-func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileSize float64) (float64, float64) {
+func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (float64, float64) {
 	// Try to move to the new X position
 	newX := posX + dx
 	
@@ -233,15 +234,15 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileSize float64) (
 		if dx > 0 {
 			// Moving RIGHT - find the right edge of the entity and which tile column it's in
 			rightEdge := newX + w
-			blockingTileCol := math.Floor(rightEdge / tileSize)
+			blockingTileCol := math.Floor(rightEdge / tileW)
 			// Push back: left edge of blocking tile minus our width minus safety gap
-			newX = blockingTileCol*tileSize - w - collisionEpsilon
+			newX = blockingTileCol*tileW - w - collisionEpsilon
 			
 		} else if dx < 0 {
 			// Moving LEFT - find which tile column our left edge is in
-			blockingTileCol := math.Floor(newX / tileSize)
+			blockingTileCol := math.Floor(newX / tileW)
 			// Push back: right edge of blocking tile plus safety gap
-			newX = (blockingTileCol+1)*tileSize + collisionEpsilon
+			newX = (blockingTileCol+1)*tileW + collisionEpsilon
 		}
 	}
 	
@@ -254,7 +255,7 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileSize float64) (
 //  2. Check if that position would overlap any tiles
 //  3. If yes, "push back" to the edge of the blocking tile
 // Returns the resolved (x, y) position.
-func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileSize float64) (float64, float64) {
+func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (float64, float64) {
 	// Try to move to the new Y position
 	newY := posY + dy
 	
@@ -264,15 +265,15 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileSize float64) (
 		if dy > 0 {
 			// Moving DOWN - find the bottom edge of the entity and which tile row it's in
 			bottomEdge := newY + h
-			blockingTileRow := math.Floor(bottomEdge / tileSize)
+			blockingTileRow := math.Floor(bottomEdge / tileH)
 			// Push back: top edge of blocking tile minus our height minus safety gap
-			newY = blockingTileRow*tileSize - h - collisionEpsilon
+			newY = blockingTileRow*tileH - h - collisionEpsilon
 			
 		} else if dy < 0 {
 			// Moving UP - find which tile row our top edge is in
-			blockingTileRow := math.Floor(newY / tileSize)
+			blockingTileRow := math.Floor(newY / tileH)
 			// Push back: bottom edge of blocking tile plus safety gap
-			newY = (blockingTileRow+1)*tileSize + collisionEpsilon
+			newY = (blockingTileRow+1)*tileH + collisionEpsilon
 		}
 	}
 	

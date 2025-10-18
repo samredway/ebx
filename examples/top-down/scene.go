@@ -38,6 +38,7 @@ func (es *ExampleScene) OnEnter() {
 		"DungeonTiles",
 		"DungeonTiles.png",
 		32,
+		32,
 	)
 	es.tileMap = assetmgr.NewTileMapFromTmx(
 		gameassets.GameFS,
@@ -51,8 +52,8 @@ func (es *ExampleScene) OnEnter() {
 		image.Rect(
 			0,
 			0,
-			es.tileMap.MapSize().W*es.tileMap.TileSize(),
-			es.tileMap.MapSize().H*es.tileMap.TileSize(),
+			es.tileMap.MapSize().W*es.tileMap.TileW(),
+			es.tileMap.MapSize().H*es.tileMap.TileH(),
 		),
 	)
 

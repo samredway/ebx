@@ -58,9 +58,9 @@ func (a *Assets) AddImage(imgName string, img *ebiten.Image) {
 	a.imgs[imgName] = img
 }
 
-func (a *Assets) LoadTileSetFromFS(fsys fs.FS, name, path string, tileSize int) {
+func (a *Assets) LoadTileSetFromFS(fsys fs.FS, name, path string, frameW, frameH int) {
 	sheet := loadEbitenImage(fsys, path)
-	a.tiles[name] = splitSheet(sheet, tileSize)
+	a.tiles[name] = splitSheet(sheet, frameW, frameH)
 }
 
 func (a *Assets) GetTileSet(name string) []*ebiten.Image {
@@ -71,24 +71,24 @@ func (a *Assets) GetTileSet(name string) []*ebiten.Image {
 	return tileSet
 }
 
-func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, name, path string, frameSize int) {
+func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, name, path string, frameW, frameH int) {
 	sheet := loadEbitenImage(fsys, path)
-	a.sprites[name] = splitSheet(sheet, frameSize)
+	a.sprites[name] = splitSheet(sheet, frameW, frameH)
 }
 
-func splitSheet(sheet *ebiten.Image, frameSize int) []*ebiten.Image {
+func splitSheet(sheet *ebiten.Image, frameW, frameH int) []*ebiten.Image {
 	b := sheet.Bounds()
 	w := b.Dx()
 	h := b.Dy()
 
-	if w%frameSize != 0 || h%frameSize != 0 {
-		panic("Assets sheet not divisible by frame size")
+	if w%frameW != 0 || h%frameH != 0 {
+		panic("Assets sheet not divisible by frame dimensions")
 	}
 
 	var tiles []*ebiten.Image
-	for y := 0; y < h; y += frameSize {
-		for x := 0; x < w; x += frameSize {
-			sub := sheet.SubImage(image.Rect(x, y, x+frameSize, y+frameSize)).(*ebiten.Image)
+	for y := 0; y < h; y += frameH {
+		for x := 0; x < w; x += frameW {
+			sub := sheet.SubImage(image.Rect(x, y, x+frameW, y+frameH)).(*ebiten.Image)
 			tiles = append(tiles, sub)
 		}
 	}
@@ -116,9 +116,10 @@ func loadEbitenImage(fsys fs.FS, path string) *ebiten.Image {
 // tiled uses ids from 1 not 0 so the ids of the tiles in each layer will be the
 // same as the index + 1 in Assets.tiles
 type TileMap struct {
-	tileSize int       // Assume tiles are square
-	mapSize  geom.Size // World width and height in tiles
-	layers   [][]int   // Each layer is flat []int of tiles
+	tileW   int       // Tile width in pixels
+	tileH   int       // Tile height in pixels
+	mapSize geom.Size // World width and height in tiles
+	layers  [][]int   // Each layer is flat []int of tiles
 }
 
 // NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
@@ -129,13 +130,15 @@ func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets Assets) *TileMap {
 	}
 
 	return &TileMap{
-		tileSize: m.TileHeight, // Assume tiles are square
-		mapSize:  geom.Size{W: m.MapWidth, H: m.MapHeight},
-		layers:   m.Layers,
+		tileW:   m.TileWidth,
+		tileH:   m.TileHeight,
+		mapSize: geom.Size{W: m.MapWidth, H: m.MapHeight},
+		layers:  m.Layers,
 	}
 }
 
-func (tm *TileMap) TileSize() int      { return tm.tileSize }
+func (tm *TileMap) TileW() int         { return tm.tileW }
+func (tm *TileMap) TileH() int         { return tm.tileH }
 func (tm *TileMap) NumLayers() int     { return len(tm.layers) }
 func (tm *TileMap) MapSize() geom.Size { return tm.mapSize }
 
@@ -144,12 +147,13 @@ func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) bool {
 		panic("invalid layer")
 	}
 
-	ts := float64(tm.TileSize())
+	tw := float64(tm.TileW())
+	th := float64(tm.TileH())
 
-	tx0 := int(math.Floor(x / ts))
-	ty0 := int(math.Floor(y / ts))
-	tx1 := int(math.Floor((x+w-1)/ts)) + 1 // exclusive Max
-	ty1 := int(math.Floor((y+h-1)/ts)) + 1
+	tx0 := int(math.Floor(x / tw))
+	ty0 := int(math.Floor(y / th))
+	tx1 := int(math.Floor((x+w-1)/tw)) + 1 // exclusive Max
+	ty1 := int(math.Floor((y+h-1)/th)) + 1
 
 	// outside = collide with world bounds
 	if tx1 <= 0 || ty1 <= 0 || tx0 >= tm.mapSize.W || ty0 >= tm.mapSize.H {
@@ -183,8 +187,8 @@ func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) bool {
 
 func (tm *TileMap) WorldCoordsToTileCoords(wc geom.Vec2) geom.Vec2I {
 	return geom.Vec2I{
-		X: int(wc.X / float64(tm.tileSize)),
-		Y: int(wc.Y / float64(tm.tileSize)),
+		X: int(wc.X / float64(tm.tileW)),
+		Y: int(wc.Y / float64(tm.tileH)),
 	}
 }
 
