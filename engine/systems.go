@@ -126,10 +126,14 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	offsetX := int(rs.camera.X)
 	offsetY := int(rs.camera.Y)
 
+	// Account for zoom when calculating visible area
+	viewportWorldW := int(float64(rs.camera.Viewport().W) / rs.camera.Zoom)
+	viewportWorldH := int(float64(rs.camera.Viewport().H) / rs.camera.Zoom)
+
 	tx0 := offsetX / rs.tileMap.TileW()
-	tx1 := (offsetX+rs.camera.Viewport().W)/rs.tileMap.TileW() + 1
+	tx1 := (offsetX+viewportWorldW)/rs.tileMap.TileW() + 1
 	ty0 := offsetY / rs.tileMap.TileH()
-	ty1 := (offsetY+rs.camera.Viewport().H)/rs.tileMap.TileH() + 1
+	ty1 := (offsetY+viewportWorldH)/rs.tileMap.TileH() + 1
 
 	viewRect := image.Rect(tx0, ty0, tx1, ty1)
 
@@ -160,8 +164,8 @@ func (rs *RenderSystem) drawToScreen(
 	screen *ebiten.Image,
 ) {
 	screenCoords := rs.camera.Apply(worldCoords)
-	imgW := float64(img.Bounds().Dx())
-	imgH := float64(img.Bounds().Dy())
+	imgW := float64(img.Bounds().Dx()) * rs.camera.Zoom
+	imgH := float64(img.Bounds().Dy()) * rs.camera.Zoom
 	viewW := float64(rs.camera.Viewport().W)
 	viewH := float64(rs.camera.Viewport().H)
 
@@ -172,6 +176,7 @@ func (rs *RenderSystem) drawToScreen(
 	}
 
 	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Scale(rs.camera.Zoom, rs.camera.Zoom)
 	opts.GeoM.Translate(screenCoords.X, screenCoords.Y)
 	screen.DrawImage(img, opts)
 }

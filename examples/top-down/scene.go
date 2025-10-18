@@ -49,6 +49,7 @@ func (es *ExampleScene) OnEnter() {
 			es.tileMap.MapSize().H*es.tileMap.TileH(),
 		),
 	)
+	es.camera.Zoom = 2.0
 
 	// Setup core systems
 	es.renderSys = engine.NewRenderSystem(
