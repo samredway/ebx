@@ -140,7 +140,7 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 
 	// Iterate layers and render
 	for layer := range rs.tileMap.NumLayers() {
-		rs.tileMap.ForEachIn(viewRect, layer, func(tx, ty, id int) {
+		err := rs.tileMap.ForEachIn(viewRect, layer, func(tx, ty, id int) {
 			worldCoords := geom.Vec2{
 				X: float64(tx * rs.tileMap.TileW()),
 				Y: float64(ty * rs.tileMap.TileH()),
@@ -153,6 +153,9 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 				rs.drawToScreen(worldCoords, img, screen)
 			}
 		})
+		if err != nil {
+			panic(fmt.Sprintf("Failed to iterate tiles in layer %d: %v", layer, err))
+		}
 	}
 
 	// Draw enitities -----
@@ -236,7 +239,11 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (flo
 	// Try to move to the new X position
 	newX := posX + dx
 	
-	if ms.tileMap.OverlapsTiles(newX, posY, w, h, ms.collisionLayer) {
+	overlaps, err := ms.tileMap.OverlapsTiles(newX, posY, w, h, ms.collisionLayer)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
+	}
+	if overlaps {
 		// We hit something! Need to push back to the edge of the blocking tile
 		
 		if dx > 0 {
@@ -267,7 +274,11 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (flo
 	// Try to move to the new Y position
 	newY := posY + dy
 	
-	if ms.tileMap.OverlapsTiles(posX, newY, w, h, ms.collisionLayer) {
+	overlaps, err := ms.tileMap.OverlapsTiles(posX, newY, w, h, ms.collisionLayer)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
+	}
+	if overlaps {
 		// We hit something! Need to push back to the edge of the blocking tile
 		
 		if dy > 0 {

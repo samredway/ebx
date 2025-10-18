@@ -126,12 +126,68 @@ func loadEbitenImage(fsys fs.FS, path string) (*ebiten.Image, error) {
 	return ebiten.NewImageFromImage(img), nil
 }
 
+// FirstGid represents the first global tile ID for a tileset in a TMX map
+type FirstGid int
+
 // TilesetInfo stores metadata about a tileset referenced in the map
 type TilesetInfo struct {
-	firstGid  int    // First global ID for this tileset
 	imgSource string // Path to the image file
 	tileW     int    // Tile width
 	tileH     int    // Tile height
+}
+
+// Tilesets manages tileset metadata and tile ID resolution
+type Tilesets struct {
+	infos  map[FirstGid]TilesetInfo // Tileset metadata keyed by firstGid
+	assets *Assets                  // Reference to assets for loading tile images
+}
+
+// NewTilesets creates a new Tilesets manager
+func NewTilesets(assets *Assets) *Tilesets {
+	return &Tilesets{
+		infos:  make(map[FirstGid]TilesetInfo),
+		assets: assets,
+	}
+}
+
+// Add registers a tileset with its firstGid
+func (ts *Tilesets) Add(firstGid FirstGid, info TilesetInfo) {
+	ts.infos[firstGid] = info
+}
+
+// GetImageForTileId returns the tile image for a given global tile ID
+func (ts *Tilesets) GetImageForTileId(globalId int) (*ebiten.Image, error) {
+	if globalId == 0 {
+		return nil, nil // 0 means empty tile
+	}
+
+	// Find which tileset this ID belongs to by checking firstGids in descending order
+	var matchingFirstGid FirstGid
+	for firstGid := range ts.infos {
+		if globalId >= int(firstGid) && firstGid > matchingFirstGid {
+			matchingFirstGid = firstGid
+		}
+	}
+
+	if matchingFirstGid == 0 {
+		return nil, fmt.Errorf("no tileset found for tile ID %d", globalId)
+	}
+
+	info := ts.infos[matchingFirstGid]
+	localId := globalId - int(matchingFirstGid)
+
+	// Get the tileset by image filename
+	imgFilename := filepath.Base(info.imgSource)
+	tileSet, err := ts.assets.GetTileSet(imgFilename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tileset %s: %w", imgFilename, err)
+	}
+
+	if localId >= len(tileSet) {
+		return nil, fmt.Errorf("tile ID %d (local %d) out of range for tileset %s (has %d tiles)", globalId, localId, info.imgSource, len(tileSet))
+	}
+
+	return tileSet[localId], nil
 }
 
 // TileMap represents a whole tilemap - world or level. Currently it is designed
@@ -141,9 +197,8 @@ type TilesetInfo struct {
 // tiled uses ids from 1 not 0 so the ids of the tiles in each layer will be the
 // same as the index + 1 in Assets.tiles
 type TileMap struct {
-	*ebitmx.EbitenMap               // Embedded map data from ebitmx
-	assets            *Assets       // TileMap owns its assets
-	tilesets          []TilesetInfo // Metadata about each tileset
+	*ebitmx.EbitenMap      // Embedded map data from ebitmx
+	tilesets      *Tilesets // Tileset manager
 }
 
 // NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
@@ -154,17 +209,17 @@ func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets *Assets) (*TileMap, 
 		return nil, fmt.Errorf("failed to load TMX file %s: %w", pathToTmx, err)
 	}
 
+	tileMap := &TileMap{
+		EbitenMap: m,
+		tilesets:  NewTilesets(assets),
+	}
+
 	tmxDir := normalizeTmxDir(pathToTmx)
-	tilesets, err := loadTilesets(fsys, tmxDir, m.Tilesets, assets)
-	if err != nil {
+	if err := tileMap.loadTilesets(fsys, tmxDir, m.Tilesets); err != nil {
 		return nil, fmt.Errorf("failed to load tilesets for %s: %w", pathToTmx, err)
 	}
 
-	return &TileMap{
-		EbitenMap: m,
-		assets:    assets,
-		tilesets:  tilesets,
-	}, nil
+	return tileMap, nil
 }
 
 func normalizeTmxDir(pathToTmx string) string {
@@ -175,19 +230,18 @@ func normalizeTmxDir(pathToTmx string) string {
 	return tmxDir
 }
 
-func loadTilesets(fsys fs.FS, tmxDir string, tilesetRefs []ebitmx.TilesetRef, assets *Assets) ([]TilesetInfo, error) {
-	var tilesets []TilesetInfo
+func (tm *TileMap) loadTilesets(fsys fs.FS, tmxDir string, tilesetRefs []ebitmx.TilesetRef) error {
 	for _, tsRef := range tilesetRefs {
-		info, err := loadTileset(fsys, tmxDir, tsRef, assets)
+		info, err := tm.loadTileset(fsys, tmxDir, tsRef)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		tilesets = append(tilesets, info)
+		tm.tilesets.Add(FirstGid(tsRef.FirstGid), info)
 	}
-	return tilesets, nil
+	return nil
 }
 
-func loadTileset(fsys fs.FS, tmxDir string, tsRef ebitmx.TilesetRef, assets *Assets) (TilesetInfo, error) {
+func (tm *TileMap) loadTileset(fsys fs.FS, tmxDir string, tsRef ebitmx.TilesetRef) (TilesetInfo, error) {
 	tsxPath := resolvePath(tmxDir, tsRef.Source)
 
 	tsxBytes, err := fs.ReadFile(fsys, tsxPath)
@@ -203,12 +257,11 @@ func loadTileset(fsys fs.FS, tmxDir string, tsRef ebitmx.TilesetRef, assets *Ass
 	imgPath := resolvePath(tmxDir, tileset.Image.Source)
 	imgFilename := filepath.Base(imgPath)
 
-	if err := assets.LoadTileSetFromFS(fsys, imgFilename, imgPath, tileset.TileWidth, tileset.TileHeight); err != nil {
+	if err := tm.tilesets.assets.LoadTileSetFromFS(fsys, imgFilename, imgPath, tileset.TileWidth, tileset.TileHeight); err != nil {
 		return TilesetInfo{}, fmt.Errorf("failed to load tileset image %s: %w", imgPath, err)
 	}
 
 	return TilesetInfo{
-		firstGid:  tsRef.FirstGid,
 		imgSource: tileset.Image.Source,
 		tileW:     tileset.TileWidth,
 		tileH:     tileset.TileHeight,
@@ -229,38 +282,12 @@ func (tm *TileMap) MapSize() geom.Size { return geom.Size{W: tm.MapWidth, H: tm.
 
 // GetImageById returns the tile image for a given global tile ID
 func (tm *TileMap) GetImageById(globalId int) (*ebiten.Image, error) {
-	if globalId == 0 {
-		return nil, nil // 0 means empty tile
-	}
-
-	// Find which tileset this ID belongs to (iterate backwards to find the highest matching firstGid)
-	for i := len(tm.tilesets) - 1; i >= 0; i-- {
-		ts := tm.tilesets[i]
-		if globalId >= ts.firstGid {
-			// Calculate local ID within this tileset
-			localId := globalId - ts.firstGid
-
-			// Get the tileset by image filename
-			imgFilename := filepath.Base(ts.imgSource)
-			tileSet, err := tm.assets.GetTileSet(imgFilename)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get tileset %s: %w", imgFilename, err)
-			}
-
-			if localId >= len(tileSet) {
-				return nil, fmt.Errorf("tile ID %d (local %d) out of range for tileset %s (has %d tiles)", globalId, localId, ts.imgSource, len(tileSet))
-			}
-
-			return tileSet[localId], nil
-		}
-	}
-
-	return nil, fmt.Errorf("no tileset found for tile ID %d", globalId)
+	return tm.tilesets.GetImageForTileId(globalId)
 }
 
-func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) bool {
+func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) (bool, error) {
 	if layer < 0 || layer >= len(tm.Layers) {
-		panic("invalid layer")
+		return false, fmt.Errorf("invalid layer index: %d (map has %d layers)", layer, len(tm.Layers))
 	}
 
 	tw := float64(tm.TileW())
@@ -273,7 +300,7 @@ func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) bool {
 
 	// outside = collide with world bounds
 	if tx1 <= 0 || ty1 <= 0 || tx0 >= tm.MapWidth || ty0 >= tm.MapHeight {
-		return true
+		return true, nil
 	}
 	if tx0 < 0 {
 		tx0 = 0
@@ -294,18 +321,18 @@ func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) bool {
 		base := ty * rowW
 		for tx := tx0; tx < tx1; tx++ {
 			if data[base+tx] != 0 {
-				return true
+				return true, nil
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 // ForEachIn allows user to run a function (for example to render) each tile within
 // the bounds (in terms of tilesx and tilesy coords) of a rect
-func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id int)) {
+func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id int)) error {
 	if layer < 0 || layer >= len(tm.Layers) {
-		panic(fmt.Sprintf("invalid layer index: %d", layer))
+		return fmt.Errorf("invalid layer index: %d (map has %d layers)", layer, len(tm.Layers))
 	}
 
 	// clamp to map bounds
@@ -330,8 +357,9 @@ func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id
 			id := data[row+tx]
 			if id == 0 {
 				continue
-			}
-			fn(tx, ty, id)
 		}
+		fn(tx, ty, id)
 	}
+}
+	return nil
 }
