@@ -18,4 +18,4 @@ require (
 	golang.org/x/sys v0.37.0 // indirect
 )
 
-replace github.com/Rulox/ebitmx => github.com/samredway/ebitmx v0.0.0-20251018153006-33f28335bd20
+replace github.com/Rulox/ebitmx => github.com/samredway/ebitmx v0.0.0-20251018154639-fb871632bd27

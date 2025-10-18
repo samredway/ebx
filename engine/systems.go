@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"image"
 	"math"
 
@@ -144,7 +145,10 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 				X: float64(tx * rs.tileMap.TileW()),
 				Y: float64(ty * rs.tileMap.TileH()),
 			}
-			img := rs.tileMap.GetImageById(id)
+			img, err := rs.tileMap.GetImageById(id)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to get tile image for ID %d at (%d, %d): %v", id, tx, ty, err))
+			}
 			if img != nil {
 				rs.drawToScreen(worldCoords, img, screen)
 			}

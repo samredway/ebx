@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 	"image"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -33,11 +34,15 @@ func (es *ExampleScene) OnEnter() {
 
 	// Create assets and load tilemap (tilemap will load its own tilesets automatically)
 	es.assets = assetmgr.NewAssets()
-	es.tileMap = assetmgr.NewTileMapFromTmx(
+	tileMap, err := assetmgr.NewTileMapFromTmx(
 		gameassets.GameFS,
 		"example.tmx",
 		es.assets,
 	)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load tilemap: %v", err))
+	}
+	es.tileMap = tileMap
 
 	// Setup camera
 	es.camera = camera.NewCamera(
