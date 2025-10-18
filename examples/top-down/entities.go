@@ -48,7 +48,7 @@ func NewPlayer(
 	// Player movement
 	pMov := &engine.MovementComponent{
 		ComponentBase: engine.ComponentBase{EntityId: pId},
-		Speed:         300.0,
+		Speed:         200.0,
 		Direction:     geom.Vec2{X: 0, Y: 0},
 	}
 	mov.Attach(pMov)
