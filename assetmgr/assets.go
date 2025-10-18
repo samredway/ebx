@@ -20,12 +20,14 @@ package assetmgr
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"io/fs"
 	"math"
+	"path/filepath"
 
 	"github.com/Rulox/ebitmx"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -109,6 +111,45 @@ func loadEbitenImage(fsys fs.FS, path string) *ebiten.Image {
 	return ebiten.NewImageFromImage(img)
 }
 
+// TilesetInfo stores metadata about a tileset referenced in the map
+type TilesetInfo struct {
+	firstGid  int    // First global ID for this tileset
+	tsxSource string // Path to the .tsx file
+	imgSource string // Path to the image file (extracted from .tsx)
+	tileW     int    // Tile width
+	tileH     int    // Tile height
+}
+
+// tsxTileset represents the structure of a .tsx file
+type tsxTileset struct {
+	XMLName    xml.Name `xml:"tileset"`
+	Name       string   `xml:"name,attr"`
+	TileWidth  int      `xml:"tilewidth,attr"`
+	TileHeight int      `xml:"tileheight,attr"`
+	TileCount  int      `xml:"tilecount,attr"`
+	Columns    int      `xml:"columns,attr"`
+	Image      struct {
+		Source string `xml:"source,attr"`
+		Width  int    `xml:"width,attr"`
+		Height int    `xml:"height,attr"`
+	} `xml:"image"`
+}
+
+// parseTSX parses a .tsx file and returns the image source and tile dimensions
+func parseTSX(fsys fs.FS, tsxPath string) (imgSource string, tileW, tileH int, err error) {
+	data, err := fs.ReadFile(fsys, tsxPath)
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("failed to read TSX file %s: %w", tsxPath, err)
+	}
+
+	var tileset tsxTileset
+	if err := xml.Unmarshal(data, &tileset); err != nil {
+		return "", 0, 0, fmt.Errorf("failed to parse TSX file %s: %w", tsxPath, err)
+	}
+
+	return tileset.Image.Source, tileset.TileWidth, tileset.TileHeight, nil
+}
+
 // TileMap represents a whole tilemap - world or level. Currently it is designed
 // to work by loading .tmx files (created in the free and open source Tiled level
 // editor)
@@ -116,24 +157,76 @@ func loadEbitenImage(fsys fs.FS, path string) *ebiten.Image {
 // tiled uses ids from 1 not 0 so the ids of the tiles in each layer will be the
 // same as the index + 1 in Assets.tiles
 type TileMap struct {
-	tileW   int       // Tile width in pixels
-	tileH   int       // Tile height in pixels
-	mapSize geom.Size // World width and height in tiles
-	layers  [][]int   // Each layer is flat []int of tiles
+	tileW    int            // Tile width in pixels
+	tileH    int            // Tile height in pixels
+	mapSize  geom.Size      // World width and height in tiles
+	layers   [][]int        // Each layer is flat []int of tiles
+	assets   *Assets        // TileMap owns its assets
+	tilesets []TilesetInfo  // Metadata about each tileset
 }
 
 // NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
-func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets Assets) *TileMap {
+// It automatically parses referenced .tsx files and loads all tilesets
+func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets *Assets) *TileMap {
 	m, err := ebitmx.GetEbitenMapFromFS(fsys, pathToTmx)
 	if err != nil {
 		panic(fmt.Sprintf("Tilemap not found with at path %s", pathToTmx))
 	}
+	
+	// Get the directory containing the TMX file for resolving relative paths
+	tmxDir := filepath.Dir(pathToTmx)
+	if tmxDir == "." {
+		tmxDir = ""
+	}
+	
+	// Parse each tileset reference and load the images
+	var tilesets []TilesetInfo
+	for _, tsRef := range m.Tilesets {
+		// Resolve TSX path relative to TMX file
+		var tsxPath string
+		if tmxDir == "" {
+			tsxPath = tsRef.Source
+		} else {
+			tsxPath = filepath.Join(tmxDir, tsRef.Source)
+		}
+		
+		// Parse the TSX file to get image source and tile dimensions
+		imgSource, tileW, tileH, err := parseTSX(fsys, tsxPath)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to parse tileset %s: %v", tsxPath, err))
+		}
+		
+		// Resolve image path relative to TMX file
+		var imgPath string
+		if tmxDir == "" {
+			imgPath = imgSource
+		} else {
+			imgPath = filepath.Join(tmxDir, imgSource)
+		}
+		
+		// Use just the filename as the key (e.g., "DungeonFloors.png")
+		imgFilename := filepath.Base(imgPath)
+		
+		// Load the tileset image
+		assets.LoadTileSetFromFS(fsys, imgFilename, imgPath, tileW, tileH)
+		
+		// Store tileset metadata
+		tilesets = append(tilesets, TilesetInfo{
+			firstGid:  tsRef.FirstGid,
+			tsxSource: tsRef.Source,
+			imgSource: imgSource,
+			tileW:     tileW,
+			tileH:     tileH,
+		})
+	}
 
 	return &TileMap{
-		tileW:   m.TileWidth,
-		tileH:   m.TileHeight,
-		mapSize: geom.Size{W: m.MapWidth, H: m.MapHeight},
-		layers:  m.Layers,
+		tileW:    m.TileWidth,
+		tileH:    m.TileHeight,
+		mapSize:  geom.Size{W: m.MapWidth, H: m.MapHeight},
+		layers:   m.Layers,
+		assets:   assets,
+		tilesets: tilesets,
 	}
 }
 
@@ -141,6 +234,34 @@ func (tm *TileMap) TileW() int         { return tm.tileW }
 func (tm *TileMap) TileH() int         { return tm.tileH }
 func (tm *TileMap) NumLayers() int     { return len(tm.layers) }
 func (tm *TileMap) MapSize() geom.Size { return tm.mapSize }
+
+// GetImageById returns the tile image for a given global tile ID
+func (tm *TileMap) GetImageById(globalId int) *ebiten.Image {
+	if globalId == 0 {
+		return nil // 0 means empty tile
+	}
+	
+	// Find which tileset this ID belongs to (iterate backwards to find the highest matching firstGid)
+	for i := len(tm.tilesets) - 1; i >= 0; i-- {
+		ts := tm.tilesets[i]
+		if globalId >= ts.firstGid {
+			// Calculate local ID within this tileset
+			localId := globalId - ts.firstGid
+			
+			// Get the tileset by image filename
+			imgPath := filepath.Base(filepath.Join(filepath.Dir(""), ts.imgSource))
+			tileSet := tm.assets.GetTileSet(imgPath)
+			
+			if localId >= len(tileSet) {
+				panic(fmt.Sprintf("Tile ID %d (local %d) out of range for tileset %s", globalId, localId, ts.imgSource))
+			}
+			
+			return tileSet[localId]
+		}
+	}
+	
+	panic(fmt.Sprintf("No tileset found for tile ID %d", globalId))
+}
 
 func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) bool {
 	if layer < 0 || layer >= len(tm.layers) {

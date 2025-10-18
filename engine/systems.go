@@ -99,7 +99,6 @@ type RenderSystem struct {
 	positions *PositionStore
 	camera    *camera.Camera
 	tileMap   *assetmgr.TileMap
-	tileSet   []*ebiten.Image
 	camTarget EntityId
 }
 
@@ -107,14 +106,12 @@ func NewRenderSystem(
 	pos *PositionStore,
 	cam *camera.Camera,
 	tileMap *assetmgr.TileMap,
-	tileSet []*ebiten.Image,
 ) *RenderSystem {
 	return &RenderSystem{
 		SystemBase: NewSystemBase[*RenderComponent](),
 		positions:  pos,
 		camera:     cam,
 		tileMap:    tileMap,
-		tileSet:    tileSet,
 	}
 }
 
@@ -143,8 +140,10 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 				X: float64(tx * rs.tileMap.TileW()),
 				Y: float64(ty * rs.tileMap.TileH()),
 			}
-			img := rs.tileSet[id-1]
-			rs.drawToScreen(worldCoords, img, screen)
+			img := rs.tileMap.GetImageById(id)
+			if img != nil {
+				rs.drawToScreen(worldCoords, img, screen)
+			}
 		})
 	}
 

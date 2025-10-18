@@ -31,19 +31,12 @@ func (es *ExampleScene) OnEnter() {
 	es.ids = engine.IdGen{}
 	es.posStore = engine.NewPositionStore()
 
-	// Load assets
+	// Create assets and load tilemap (tilemap will load its own tilesets automatically)
 	es.assets = assetmgr.NewAssets()
-	es.assets.LoadTileSetFromFS(
-		gameassets.GameFS,
-		"DungeonTiles",
-		"DungeonTiles.png",
-		32,
-		32,
-	)
 	es.tileMap = assetmgr.NewTileMapFromTmx(
 		gameassets.GameFS,
 		"example.tmx",
-		*es.assets,
+		es.assets,
 	)
 
 	// Setup camera
@@ -62,7 +55,6 @@ func (es *ExampleScene) OnEnter() {
 		es.posStore,
 		es.camera,
 		es.tileMap,
-		es.assets.GetTileSet("DungeonTiles"),
 	)
 	es.moveSys = engine.NewMovementSystem(es.posStore, es.tileMap, 1)
 	es.userInputSys = &engine.UserInputSystem{}
