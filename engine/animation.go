@@ -7,6 +7,11 @@ import (
 	"github.com/samredway/ebx/geom"
 )
 
+// AnimationProvider is an interface for getting current animation frame for an entity
+type AnimationProvider interface {
+	GetCurrentImage(id EntityId) *ebiten.Image
+}
+
 // AnimationDef defines a single animation sequence (shared across entities)
 type AnimationDef struct {
 	Name        string
@@ -34,11 +39,6 @@ func (al *AnimationLibrary) AddAnimation(name string, def *AnimationDef) {
 
 func (al *AnimationLibrary) GetAnimation(name string) *AnimationDef {
 	return al.animations[name]
-}
-
-// AnimationProvider is an interface for getting current animation frame for an entity
-type AnimationProvider interface {
-	GetCurrentImage(id EntityId) *ebiten.Image
 }
 
 // AnimationState represents a state in the animation state machine
@@ -83,7 +83,7 @@ func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, conditio
 func (sm *AnimationStateMachine) Update(state *StateComponent) (AnimationState, string) {
 	// Check all transitions from current state (sorted by priority)
 	transitions := sm.transitions[sm.currentState]
-	
+
 	// Find highest priority transition that's valid
 	var bestTransition *AnimationTransition
 	for i := range transitions {
@@ -94,27 +94,27 @@ func (sm *AnimationStateMachine) Update(state *StateComponent) (AnimationState, 
 			}
 		}
 	}
-	
+
 	// Transition if we found one
 	if bestTransition != nil {
 		sm.currentState = bestTransition.to
 	}
-	
+
 	// Build animation name from state + direction
 	animName := sm.buildAnimationName(sm.currentState, state.FacingDir)
-	
+
 	return sm.currentState, animName
 }
 
 func (sm *AnimationStateMachine) buildAnimationName(state AnimationState, dir geom.Vec2I) string {
 	// Convert direction to string
 	dirStr := directionToString(dir)
-	
+
 	// Dead animation typically has no direction
 	if state == AnimStateDead {
 		return "death"
 	}
-	
+
 	// Other states use direction
 	return fmt.Sprintf("%s_%s", state, dirStr)
 }

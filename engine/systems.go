@@ -61,6 +61,11 @@ func (sb *SystemBase[C]) Update(dt float64) {
 	sb.components = active
 }
 
+// AnimationProvider is an interface for getting current animation frame for an entity
+type AnimationProvider interface {
+	GetCurrentImage(id EntityId) *ebiten.Image
+}
+
 // RenderSystem gets run in the Scene.Draw() method
 type RenderSystem struct {
 	*SystemBase[*RenderComponent]
