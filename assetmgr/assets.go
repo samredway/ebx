@@ -80,17 +80,25 @@ func (a *Assets) GetTileSet(name string) ([]*ebiten.Image, error) {
 	return tileSet, nil
 }
 
-func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, name, path string, frameW, frameH int) error {
+func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, path string, frameW, frameH int) error {
 	sheet, err := loadEbitenImage(fsys, path)
 	if err != nil {
-		return fmt.Errorf("failed to load sprite sheet %s: %w", name, err)
+		return fmt.Errorf("failed to load sprite sheet %s: %w", path, err)
 	}
 	sprites, err := splitSheet(sheet, frameW, frameH)
 	if err != nil {
-		return fmt.Errorf("failed to split sprite sheet %s: %w", name, err)
+		return fmt.Errorf("failed to split sprite sheet %s: %w", path, err)
 	}
-	a.sprites[name] = sprites
+	a.sprites[path] = sprites
 	return nil
+}
+
+func (a *Assets) GetSpriteSheet(name string) ([]*ebiten.Image, error) {
+	spriteSheet, ok := a.sprites[name]
+	if !ok {
+		return nil, fmt.Errorf("no sprite sheet with name %s", name)
+	}
+	return spriteSheet, nil
 }
 
 func splitSheet(sheet *ebiten.Image, frameW, frameH int) ([]*ebiten.Image, error) {
@@ -145,7 +153,7 @@ type Tilesets struct {
 // NewTilesets creates a new Tilesets manager
 func NewTilesets(assets *Assets) *Tilesets {
 	return &Tilesets{
-		infos:  make(map[FirstGid]TilesetInfo),
+		infos:  map[FirstGid]TilesetInfo{},
 		assets: assets,
 	}
 }
