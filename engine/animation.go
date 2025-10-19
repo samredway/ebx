@@ -56,9 +56,17 @@ type AnimationTransition struct {
 
 func NewAnimationStateMachine(initialState AnimationState) *AnimationStateMachine {
 	return &AnimationStateMachine{
-		currentState: initialState,
-		transitions:  map[AnimationState][]AnimationTransition{},
+		currentState:      initialState,
+		transitions:       map[AnimationState][]AnimationTransition{},
+		directionalStates: map[AnimationState]bool{},
 	}
+}
+
+// SetDirectional marks a state as directional (animation name includes direction)
+// By default, all states are directional. Call this with false for states like "death"
+// that should not include direction in the animation name.
+func (sm *AnimationStateMachine) SetDirectional(state AnimationState, directional bool) {
+	sm.directionalStates[state] = directional
 }
 
 func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, condition func(*StateComponent) bool, priority int) {
@@ -97,11 +105,19 @@ func (sm *AnimationStateMachine) Update(state *StateComponent) (AnimationState, 
 }
 
 func (sm *AnimationStateMachine) buildAnimationName(state AnimationState, dir geom.Vec2I) string {
-	// Convert direction to string
-	dirStr := DirectionToString(dir)
+	// Check if this state uses direction (default is true if not specified)
+	directional, exists := sm.directionalStates[state]
+	if !exists {
+		directional = true // Default: use direction
+	}
 	
-	// Build animation name: state + direction
-	// e.g., "idle_left", "walk_right", "attack_up"
+	if !directional {
+		// Non-directional animation (e.g., "death")
+		return string(state)
+	}
+	
+	// Directional animation: state + direction
+	dirStr := DirectionToString(dir)
 	return fmt.Sprintf("%s_%s", state, dirStr)
 }
 
