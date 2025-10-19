@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"image"
+	_ "image/png"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/assetmgr"
@@ -19,7 +20,10 @@ type ExampleScene struct {
 	ids          engine.IdGen
 	camera       *camera.Camera
 	posStore     *engine.PositionStore
+	stateStore   *engine.StateStore
+	animLibrary  *engine.AnimationLibrary
 	renderSys    *engine.RenderSystem
+	animationSys *engine.AnimationSystem
 	moveSys      *engine.MovementSystem
 	userInputSys *engine.UserInputSystem
 	tileMap      *assetmgr.TileMap
@@ -31,6 +35,8 @@ type ExampleScene struct {
 func (es *ExampleScene) OnEnter() {
 	es.ids = engine.IdGen{}
 	es.posStore = engine.NewPositionStore()
+	es.stateStore = engine.NewStateStore()
+	es.animLibrary = engine.NewAnimationLibrary()
 
 	// Create assets and load tilemap (tilemap will load its own tilesets automatically)
 	es.assets = assetmgr.NewAssets()
@@ -44,6 +50,17 @@ func (es *ExampleScene) OnEnter() {
 	}
 	es.tileMap = tileMap
 
+	// Load character spritesheets - first check dimensions
+	err = es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Idle.png", 16, 16)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load Character_Idle.png: %v", err))
+	}
+
+	err = es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Walk.png", 16, 16)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load Character_Walk.png: %v", err))
+	}
+
 	// Setup camera
 	es.camera = camera.NewCamera(
 		es.viewport,
@@ -56,17 +73,95 @@ func (es *ExampleScene) OnEnter() {
 	)
 	es.camera.Zoom = 2.0
 
+	// Setup animation definitions
+
+	// Character_Idle.png: 4 rows x 4 columns
+	// Row 0 = left, Row 1 = right, Row 2 = up, Row 3 = down
+	idleSheet, _ := es.assets.GetSpriteSheet("Character_Idle.png")
+
+	es.animLibrary.AddAnimation("idle_left", &engine.AnimationDef{
+		Name:        "idle_left",
+		SpriteSheet: idleSheet,
+		FirstFrame:  0,
+		LastFrame:   3,
+		FrameTime:   0.15, // 150ms per frame
+		Loop:        true,
+	})
+	es.animLibrary.AddAnimation("idle_right", &engine.AnimationDef{
+		Name:        "idle_right",
+		SpriteSheet: idleSheet,
+		FirstFrame:  4,
+		LastFrame:   7,
+		FrameTime:   0.15,
+		Loop:        true,
+	})
+	es.animLibrary.AddAnimation("idle_up", &engine.AnimationDef{
+		Name:        "idle_up",
+		SpriteSheet: idleSheet,
+		FirstFrame:  8,
+		LastFrame:   11,
+		FrameTime:   0.15,
+		Loop:        true,
+	})
+	es.animLibrary.AddAnimation("idle_down", &engine.AnimationDef{
+		Name:        "idle_down",
+		SpriteSheet: idleSheet,
+		FirstFrame:  12,
+		LastFrame:   15,
+		FrameTime:   0.15,
+		Loop:        true,
+	})
+
+	// Character_Idle.png: 4 rows x 4 columns
+	// Row 0 = left, Row 1 = right, Row 2 = up, Row 3 = down
+	walkSheet, _ := es.assets.GetSpriteSheet("Character_Walk.png")
+
+	es.animLibrary.AddAnimation("walk_left", &engine.AnimationDef{
+		Name:        "walk_left",
+		SpriteSheet: walkSheet,
+		FirstFrame:  0,
+		LastFrame:   3,
+		FrameTime:   0.15, // 150ms per frame
+		Loop:        true,
+	})
+	es.animLibrary.AddAnimation("walk_right", &engine.AnimationDef{
+		Name:        "walk_right",
+		SpriteSheet: walkSheet,
+		FirstFrame:  4,
+		LastFrame:   7,
+		FrameTime:   0.15,
+		Loop:        true,
+	})
+	es.animLibrary.AddAnimation("walk_up", &engine.AnimationDef{
+		Name:        "walk_up",
+		SpriteSheet: walkSheet,
+		FirstFrame:  8,
+		LastFrame:   11,
+		FrameTime:   0.15,
+		Loop:        true,
+	})
+	es.animLibrary.AddAnimation("walk_down", &engine.AnimationDef{
+		Name:        "walk_down",
+		SpriteSheet: walkSheet,
+		FirstFrame:  12,
+		LastFrame:   15,
+		FrameTime:   0.15,
+		Loop:        true,
+	})
+
 	// Setup core systems
+	es.animationSys = engine.NewAnimationSystem(es.stateStore, es.animLibrary)
 	es.renderSys = engine.NewRenderSystem(
 		es.posStore,
 		es.camera,
 		es.tileMap,
+		es.animationSys, // AnimationSystem implements AnimationProvider
 	)
-	es.moveSys = engine.NewMovementSystem(es.posStore, es.tileMap, 1)
+	es.moveSys = engine.NewMovementSystem(es.posStore, es.stateStore, es.tileMap, 1)
 	es.userInputSys = &engine.UserInputSystem{}
 
 	// Create entities
-	NewPlayer(es.ids, es.renderSys, es.posStore, es.moveSys, es.userInputSys)
+	NewPlayer(es.ids, es.renderSys, es.posStore, es.stateStore, es.animationSys, es.moveSys, es.userInputSys)
 }
 
 // OnExit is called when the scene is removed from current and allows exit transitions
@@ -76,6 +171,7 @@ func (es *ExampleScene) OnExit() {}
 // Update us used primarily to run the relevant systems update methods
 func (es *ExampleScene) Update(dt float64) engine.Scene {
 	es.userInputSys.Update(dt)
+	es.animationSys.Update(dt)
 	es.moveSys.Update(dt)
 	es.renderSys.Update(dt)
 	return nil

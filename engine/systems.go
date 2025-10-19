@@ -16,6 +16,66 @@ import (
 // when resolving collisions, avoiding player jitter against walls.
 const collisionEpsilon = 0.001
 
+// AnimationDef defines a single animation sequence (shared across entities)
+type AnimationDef struct {
+	Name        string
+	SpriteSheet []*ebiten.Image // The full spritesheet (all frames)
+	FirstFrame  int             // Index of first frame in this animation
+	LastFrame   int             // Index of last frame in this animation
+	FrameTime   float64         // Time per frame in seconds
+	Loop        bool            // Whether animation loops
+}
+
+// AnimationLibrary stores reusable animation definitions
+type AnimationLibrary struct {
+	animations map[string]*AnimationDef
+}
+
+func NewAnimationLibrary() *AnimationLibrary {
+	return &AnimationLibrary{
+		animations: map[string]*AnimationDef{},
+	}
+}
+
+func (al *AnimationLibrary) AddAnimation(name string, def *AnimationDef) {
+	al.animations[name] = def
+}
+
+func (al *AnimationLibrary) GetAnimation(name string) *AnimationDef {
+	return al.animations[name]
+}
+
+// StateStore has no update but acts as a store for state components
+type StateStore struct {
+	states map[EntityId]*StateComponent
+}
+
+func NewStateStore() *StateStore {
+	return &StateStore{
+		states: map[EntityId]*StateComponent{},
+	}
+}
+
+func (ss *StateStore) GetState(id EntityId) *StateComponent {
+	state, ok := ss.states[id]
+	if !ok {
+		panic(fmt.Sprintf("StateComponent does not exist for entity %d", id))
+	}
+	return state
+}
+
+func (ss *StateStore) Attach(comps ...*StateComponent) {
+	for _, comp := range comps {
+		ss.states[comp.EntityId] = comp
+	}
+}
+
+func (ss *StateStore) Detach(comps ...*StateComponent) {
+	for _, comp := range comps {
+		delete(ss.states, comp.EntityId)
+	}
+}
+
 // PositionStore has no update but acts as a store for position component
 // that gets updated by movement system and read from by some others like
 // render and collision
@@ -94,25 +154,33 @@ func (sb *SystemBase[C]) Update(dt float64) {
 	sb.components = active
 }
 
+// AnimationProvider is an interface for getting current animation frame for an entity
+type AnimationProvider interface {
+	GetCurrentImage(id EntityId) *ebiten.Image
+}
+
 // RenderSystem gets run in the Scene.Draw() method
 type RenderSystem struct {
 	*SystemBase[*RenderComponent]
-	positions *PositionStore
-	camera    *camera.Camera
-	tileMap   *assetmgr.TileMap
-	camTarget EntityId
+	positions         *PositionStore
+	camera            *camera.Camera
+	tileMap           *assetmgr.TileMap
+	animationProvider AnimationProvider
+	camTarget         EntityId
 }
 
 func NewRenderSystem(
 	pos *PositionStore,
 	cam *camera.Camera,
 	tileMap *assetmgr.TileMap,
+	animationProvider AnimationProvider,
 ) *RenderSystem {
 	return &RenderSystem{
-		SystemBase: NewSystemBase[*RenderComponent](),
-		positions:  pos,
-		camera:     cam,
-		tileMap:    tileMap,
+		SystemBase:        NewSystemBase[*RenderComponent](),
+		positions:         pos,
+		camera:            cam,
+		tileMap:           tileMap,
+		animationProvider: animationProvider,
 	}
 }
 
@@ -161,8 +229,24 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	// Draw enitities -----
 	for _, r := range rs.components {
 		pos := rs.positions.GetPosition(r.GetEntityId())
-		rs.drawToScreen(pos.Vec2, r.Img, screen)
+		img := rs.getEntityImage(r)
+		rs.drawToScreen(pos.Vec2, img, screen)
 	}
+}
+
+// getEntityImage returns the current image for an entity (animated or static)
+func (rs *RenderSystem) getEntityImage(r *RenderComponent) *ebiten.Image {
+	// Try to get animated image first
+	if rs.animationProvider != nil {
+		if img := rs.animationProvider.GetCurrentImage(r.GetEntityId()); img != nil {
+			return img
+		}
+	}
+	// Fall back to static image
+	if (r.Img) == nil {
+		panic(fmt.Sprintf("Entity with id %d does not have any image", r.EntityId))
+	}
+	return r.Img
 }
 
 func (rs *RenderSystem) drawToScreen(
@@ -197,14 +281,16 @@ func (rs *RenderSystem) SetCamTarget(id EntityId) {
 type MovementSystem struct {
 	*SystemBase[*MovementComponent]
 	pos            *PositionStore
+	stateStore     *StateStore
 	tileMap        *assetmgr.TileMap
 	collisionLayer int // TODO: crude to pass this here? thinking ...
 }
 
-func NewMovementSystem(pos *PositionStore, tileMap *assetmgr.TileMap, collLayer int) *MovementSystem {
+func NewMovementSystem(pos *PositionStore, stateStore *StateStore, tileMap *assetmgr.TileMap, collLayer int) *MovementSystem {
 	return &MovementSystem{
 		SystemBase:     NewSystemBase[*MovementComponent](),
 		pos:            pos,
+		stateStore:     stateStore,
 		tileMap:        tileMap,
 		collisionLayer: collLayer,
 	}
@@ -218,8 +304,17 @@ func (ms *MovementSystem) Update(dt float64) {
 
 	for _, m := range ms.components {
 		pos := ms.pos.GetPosition(m.GetEntityId())
+		state := ms.stateStore.GetState(m.GetEntityId())
 
-		dir := geom.Normalize(m.Direction)
+		if !state.IsMoving {
+			continue
+		}
+
+		// Normalize direction to prevent faster diagonal movement
+		dir := geom.Vec2{X: float64(state.FacingDir.X), Y: float64(state.FacingDir.Y)}
+		dir = geom.Normalize(dir)
+
+		// Calculate velocity
 		dx := dir.X * m.Speed * dt
 		dy := dir.Y * m.Speed * dt
 
@@ -301,22 +396,22 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (flo
 	return posX, newY
 }
 
-// InputSystem handles user input and applies it to a given movement component
+// InputSystem handles user input and applies it to a given state component
 // NOTE: InputSystem has a slightly different interface to other systems as it really
-// .only handles one component although it could easily be updated to match the
+// only handles one component although it could easily be updated to match the
 // others later if required
 // NOTE: This is probably not very extensible but its hard for me to think how to
 // really generalise this right now. Will probalby come back to this and give it a
-// bit more thought. We will want other types of system that can update movement and
+// bit more thought. We will want other types of system that can update state and
 // initialse other types of actions like shooting eg EnemyTypeXAiInputSystem. I think
 // this is something I will iterate on and figure out as I go.
 type UserInputSystem struct {
-	PlayerMovement *MovementComponent
+	PlayerState *StateComponent
 }
 
 func (uis *UserInputSystem) Update(dt float64) {
-	directionX := 0.0
-	directionY := 0.0
+	directionX := 0
+	directionY := 0
 
 	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		directionX -= 1
@@ -331,10 +426,152 @@ func (uis *UserInputSystem) Update(dt float64) {
 		directionY += 1
 	}
 
-	uis.PlayerMovement.Direction.X = directionX
-	uis.PlayerMovement.Direction.Y = directionY
+	// Update IsMoving based on input (intent to move)
+	isMoving := (directionX != 0 || directionY != 0)
+	uis.PlayerState.IsMoving = isMoving
+
+	// Only update FacingDir if there's input (preserves last direction when idle)
+	if isMoving {
+		uis.PlayerState.FacingDir.X = directionX
+		uis.PlayerState.FacingDir.Y = directionY
+	}
 }
 
-func (uis *UserInputSystem) Attach(mov *MovementComponent) {
-	uis.PlayerMovement = mov
+func (uis *UserInputSystem) Attach(state *StateComponent) {
+	uis.PlayerState = state
+}
+
+// AnimationSystem updates animation state based on entity state
+// It acts as the arbiter for which animation should play based on state priority
+//
+// NOTE: Unlike other systems, AnimationSystem uses a map for both iteration and lookup.
+// This trades slightly slower iteration (map vs slice) for simpler code - no need to
+// maintain two data structures in sync. Given our pointer-based architecture, the
+// performance difference is negligible, and we need O(1) lookup for GetCurrentImage anyway.
+type AnimationSystem struct {
+	components map[EntityId]*AnimationComponent
+	stateStore *StateStore
+	library    *AnimationLibrary
+}
+
+func NewAnimationSystem(stateStore *StateStore, library *AnimationLibrary) *AnimationSystem {
+	return &AnimationSystem{
+		components: map[EntityId]*AnimationComponent{},
+		stateStore: stateStore,
+		library:    library,
+	}
+}
+
+func (as *AnimationSystem) Attach(comps ...*AnimationComponent) {
+	for _, comp := range comps {
+		as.components[comp.EntityId] = comp
+	}
+}
+
+func (as *AnimationSystem) Detach(ids ...EntityId) {
+	for _, id := range ids {
+		delete(as.components, id)
+	}
+}
+
+func (as *AnimationSystem) Update(dt float64) {
+	for _, anim := range as.components {
+		state := as.stateStore.GetState(anim.EntityId)
+
+		// Determine which animation should be playing based on state priority
+		desiredAnim := as.determineAnimation(state)
+
+		// Switch animation if needed (check this FIRST, before getting current animDef)
+		if desiredAnim != anim.CurrentAnim {
+			anim.CurrentAnim = desiredAnim
+			animDef := as.library.GetAnimation(anim.CurrentAnim)
+			if animDef == nil {
+				// Animation doesn't exist, stop playing so fallback image is used
+				anim.Playing = false
+				continue
+			}
+			anim.CurrentFrame = animDef.FirstFrame
+			anim.ElapsedTime = 0
+			anim.Playing = true
+		}
+
+		// Get current animation definition for frame advancement
+		animDef := as.library.GetAnimation(anim.CurrentAnim)
+		if animDef == nil || !anim.Playing {
+			// Animation doesn't exist or not playing, skip frame advancement
+			continue
+		}
+
+		// Advance time
+		anim.ElapsedTime += dt
+
+		// Check if we need to advance frame
+		if anim.ElapsedTime >= animDef.FrameTime {
+			anim.ElapsedTime -= animDef.FrameTime
+			anim.CurrentFrame++
+
+			// Handle end of animation
+			if anim.CurrentFrame > animDef.LastFrame {
+				if animDef.Loop {
+					anim.CurrentFrame = animDef.FirstFrame
+				} else {
+					anim.CurrentFrame = animDef.LastFrame
+					anim.Playing = false
+				}
+			}
+		}
+	}
+}
+
+// determineAnimation applies priority rules to decide which animation to play
+func (as *AnimationSystem) determineAnimation(state *StateComponent) string {
+	// Convert FacingDir to direction suffix
+	dirSuffix := as.directionToString(state.FacingDir)
+
+	// Priority order (highest to lowest)
+	if state.IsDead {
+		return "death" // Death usually has no direction
+	}
+	if state.IsAttacking {
+		return "attack_" + dirSuffix
+	}
+	if state.IsMoving {
+		return "walk_" + dirSuffix
+	}
+	return "idle_" + dirSuffix
+}
+
+// directionToString converts a Vec2I direction to a string suffix
+func (as *AnimationSystem) directionToString(dir geom.Vec2I) string {
+	// Prioritize cardinal directions
+	if dir.X < 0 {
+		return "left"
+	}
+	if dir.X > 0 {
+		return "right"
+	}
+	if dir.Y < 0 {
+		return "up"
+	}
+	if dir.Y > 0 {
+		return "down"
+	}
+	// Default to down if no direction
+	return "down"
+}
+
+// GetCurrentImage implements AnimationProvider interface
+func (as *AnimationSystem) GetCurrentImage(id EntityId) *ebiten.Image {
+	anim, ok := as.components[id]
+	if !ok || !anim.Playing {
+		return nil
+	}
+
+	animDef := as.library.GetAnimation(anim.CurrentAnim)
+	if animDef == nil {
+		return nil
+	}
+
+	img := animDef.SpriteSheet[anim.CurrentFrame]
+	return img
 }

@@ -31,12 +31,40 @@ type PositionComponent struct {
 // MovementComponent holds entity's velocity
 type MovementComponent struct {
 	ComponentBase
-	Speed     float64
-	Direction geom.Vec2 // X, Y can be (-1 to 1)
+	Speed float64
 }
 
 // RenderComponent holds current image
 type RenderComponent struct {
 	ComponentBase
 	Img *ebiten.Image
+}
+
+// StateComponent holds entity state that drives animation and behavior
+type StateComponent struct {
+	ComponentBase
+	IsMoving    bool
+	IsAttacking bool
+	IsDead      bool
+	FacingDir   geom.Vec2I // Unit vector direction entity is facing (-1, 0, 1)
+}
+
+// NewDefaultStateComponent creates a StateComponent with default values (facing down, not moving)
+func NewDefaultStateComponent(id EntityId) *StateComponent {
+	return &StateComponent{
+		ComponentBase: ComponentBase{EntityId: id},
+		IsMoving:      false,
+		IsAttacking:   false,
+		IsDead:        false,
+		FacingDir:     geom.Vec2I{X: 0, Y: 1}, // Default facing down
+	}
+}
+
+// AnimationComponent holds per-entity animation runtime state
+type AnimationComponent struct {
+	ComponentBase
+	CurrentAnim  string  // Name of currently playing animation (e.g., "walk", "idle")
+	CurrentFrame int     // Current frame index in the animation
+	ElapsedTime  float64 // Time elapsed in current frame
+	Playing      bool    // Whether animation is currently playing
 }
