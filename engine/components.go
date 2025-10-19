@@ -32,9 +32,9 @@ type PositionComponent struct {
 type MovementComponent struct {
 	ComponentBase
 	Speed      float64
-	DesiredDir geom.Vec2I // Direction input wants to move (-1, 0, 1) - set by input system
-	FacingDir  geom.Vec2I // Actual direction entity moved (-1, 0, 1) - set by movement system
-	IsMoving   bool       // Whether entity actually moved this frame - set by movement system
+	DesiredDir geom.Vec2I // Direction intent (-1, 0, 1) - set by input system
+	FacingDir  geom.Vec2I // Actual direction (-1, 0, 1) - set by movement system
+	IsMoving   bool       // Whether entity moved this frame - set by movement system
 }
 
 // RenderComponent holds current image
