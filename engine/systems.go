@@ -16,6 +16,39 @@ import (
 // when resolving collisions, avoiding player jitter against walls.
 const collisionEpsilon = 0.001
 
+// PositionStore has no update but acts as a store for position component
+// that gets updated by movement system and read from by some others like
+// render and collision
+type PositionStore struct {
+	positions map[EntityId]*PositionComponent
+}
+
+func NewPositionStore() *PositionStore {
+	return &PositionStore{
+		positions: map[EntityId]*PositionComponent{},
+	}
+}
+
+func (ps *PositionStore) GetPosition(id EntityId) *PositionComponent {
+	pos, ok := ps.positions[id]
+	if !ok {
+		panic("Position id does not exist")
+	}
+	return pos
+}
+
+func (ps *PositionStore) Attach(comps ...*PositionComponent) {
+	for _, comp := range comps {
+		ps.positions[comp.EntityId] = comp
+	}
+}
+
+func (ps *PositionStore) Detach(comps ...*PositionComponent) {
+	for _, comp := range comps {
+		delete(ps.positions, comp.EntityId)
+	}
+}
+
 // SystemBase is a generic base for all system classes with the key methods for
 // attach and detach definied and the slice of components required for interation
 type SystemBase[C Component] struct {
@@ -185,49 +218,99 @@ func (rs *RenderSystem) SetCamTarget(id EntityId) {
 
 // MovementSystem handles updating position component for corresponding entity
 // based on movement data
+// MovementSystem updates entity positions based on movement components
+// Uses a map for both iteration and O(1) lookup via GetMovement()
 type MovementSystem struct {
-	*SystemBase[*MovementComponent]
+	components     map[EntityId]*MovementComponent
 	pos            *PositionStore
-	stateStore     *StateStore
 	tileMap        *assetmgr.TileMap
 	collisionLayer int // TODO: crude to pass this here? thinking ...
 }
 
-func NewMovementSystem(pos *PositionStore, stateStore *StateStore, tileMap *assetmgr.TileMap, collLayer int) *MovementSystem {
+func NewMovementSystem(pos *PositionStore, tileMap *assetmgr.TileMap, collLayer int) *MovementSystem {
 	return &MovementSystem{
-		SystemBase:     NewSystemBase[*MovementComponent](),
+		components:     map[EntityId]*MovementComponent{},
 		pos:            pos,
-		stateStore:     stateStore,
 		tileMap:        tileMap,
 		collisionLayer: collLayer,
 	}
 }
 
+func (ms *MovementSystem) Attach(comps ...*MovementComponent) {
+	for _, comp := range comps {
+		ms.components[comp.EntityId] = comp
+	}
+}
+
+func (ms *MovementSystem) Detach(ids ...EntityId) {
+	for _, id := range ids {
+		delete(ms.components, id)
+	}
+}
+
+// GetMovement returns the movement component for an entity (O(1) lookup)
+func (ms *MovementSystem) GetMovement(id EntityId) *MovementComponent {
+	return ms.components[id]
+}
+
 func (ms *MovementSystem) Update(dt float64) {
-	ms.SystemBase.Update(dt)
 
 	tw := float64(ms.tileMap.TileW())
 	th := float64(ms.tileMap.TileH())
 
 	for _, m := range ms.components {
 		pos := ms.pos.GetPosition(m.GetEntityId())
-		state := ms.stateStore.GetState(m.GetEntityId())
 
-		if !state.IsMoving {
+		// Check if there's any desired movement
+		if m.DesiredDir.X == 0 && m.DesiredDir.Y == 0 {
+			m.IsMoving = false
 			continue
 		}
 
-		// Normalize direction to prevent faster diagonal movement
-		dir := geom.Vec2{X: float64(state.FacingDir.X), Y: float64(state.FacingDir.Y)}
+		// Normalize desired direction to prevent faster diagonal movement
+		dir := geom.Vec2{X: float64(m.DesiredDir.X), Y: float64(m.DesiredDir.Y)}
 		dir = geom.Normalize(dir)
 
 		// Calculate velocity
 		dx := dir.X * m.Speed * dt
 		dy := dir.Y * m.Speed * dt
 
+		// Store old position to detect actual movement
+		oldX, oldY := pos.X, pos.Y
+
 		// move X, then Y (axis-separated → natural sliding)
-		pos.X, pos.Y = ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, tw)
-		pos.X, pos.Y = ms.resolveYAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dy, th)
+		newX, newY := ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, tw)
+		newX, newY = ms.resolveYAxis(newX, newY, float64(pos.W), float64(pos.H), dy, th)
+
+		// Update position
+		pos.X, pos.Y = newX, newY
+
+		// Calculate actual movement to determine if entity is moving
+		actualDX := newX - oldX
+		actualDY := newY - oldY
+
+		// Update IsMoving based on whether position actually changed
+		m.IsMoving = (actualDX != 0 || actualDY != 0)
+
+		// Update FacingDir to actual movement direction (or preserve if no movement)
+		if m.IsMoving {
+			// Convert actual movement to unit vector
+			if actualDX > 0 {
+				m.FacingDir.X = 1
+			} else if actualDX < 0 {
+				m.FacingDir.X = -1
+			} else {
+				m.FacingDir.X = 0
+			}
+
+			if actualDY > 0 {
+				m.FacingDir.Y = 1
+			} else if actualDY < 0 {
+				m.FacingDir.Y = -1
+			} else {
+				m.FacingDir.Y = 0
+			}
+		}
 	}
 }
 
@@ -302,17 +385,17 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (flo
 	return posX, newY
 }
 
-// InputSystem handles user input and applies it to a given state component
+// InputSystem handles user input and applies it to a given movement component
 // NOTE: InputSystem has a slightly different interface to other systems as it really
 // only handles one component although it could easily be updated to match the
 // others later if required
 // NOTE: This is probably not very extensible but its hard for me to think how to
 // really generalise this right now. Will probalby come back to this and give it a
-// bit more thought. We will want other types of system that can update state and
+// bit more thought. We will want other types of system that can update movement and
 // initialse other types of actions like shooting eg EnemyTypeXAiInputSystem. I think
 // this is something I will iterate on and figure out as I go.
 type UserInputSystem struct {
-	PlayerState *StateComponent
+	PlayerMovement *MovementComponent
 }
 
 func (uis *UserInputSystem) Update(dt float64) {
@@ -332,19 +415,14 @@ func (uis *UserInputSystem) Update(dt float64) {
 		directionY += 1
 	}
 
-	// Update IsMoving based on input (intent to move)
-	isMoving := (directionX != 0 || directionY != 0)
-	uis.PlayerState.IsMoving = isMoving
-
-	// Only update FacingDir if there's input (preserves last direction when idle)
-	if isMoving {
-		uis.PlayerState.FacingDir.X = directionX
-		uis.PlayerState.FacingDir.Y = directionY
-	}
+	// Set desired direction from input (intent to move)
+	// MovementSystem will update FacingDir and IsMoving based on actual movement
+	uis.PlayerMovement.DesiredDir.X = directionX
+	uis.PlayerMovement.DesiredDir.Y = directionY
 }
 
-func (uis *UserInputSystem) Attach(state *StateComponent) {
-	uis.PlayerState = state
+func (uis *UserInputSystem) Attach(movement *MovementComponent) {
+	uis.PlayerMovement = movement
 }
 
 // AnimationSystem updates animation state based on entity state
@@ -357,15 +435,13 @@ func (uis *UserInputSystem) Attach(state *StateComponent) {
 // anyway.
 type AnimationSystem struct {
 	components   map[EntityId]*AnimationComponent
-	stateStore   *StateStore
 	library      *AnimationLibrary
 	stateMachine *AnimationStateMachine
 }
 
-func NewAnimationSystem(stateStore *StateStore, library *AnimationLibrary, stateMachine *AnimationStateMachine) *AnimationSystem {
+func NewAnimationSystem(library *AnimationLibrary, stateMachine *AnimationStateMachine) *AnimationSystem {
 	return &AnimationSystem{
 		components:   map[EntityId]*AnimationComponent{},
-		stateStore:   stateStore,
 		library:      library,
 		stateMachine: stateMachine,
 	}
@@ -385,18 +461,16 @@ func (as *AnimationSystem) Detach(ids ...EntityId) {
 
 func (as *AnimationSystem) Update(dt float64) {
 	for _, anim := range as.components {
-		state := as.stateStore.GetState(anim.EntityId)
-		
 		// Determine desired animation from state machine
-		desiredAnim := string(as.stateMachine.Update(state))
-		
+		desiredAnim := string(as.stateMachine.Update(anim.EntityId))
+
 		// Switch animation if needed
 		if desiredAnim != anim.CurrentAnim {
 			if !as.switchAnimation(anim, desiredAnim) {
 				continue // Animation doesn't exist, skip to next entity
 			}
 		}
-		
+
 		// Advance current animation
 		as.advanceAnimation(anim, dt)
 	}
@@ -409,7 +483,7 @@ func (as *AnimationSystem) switchAnimation(anim *AnimationComponent, animName st
 		anim.Playing = false
 		return false
 	}
-	
+
 	anim.CurrentAnim = animName
 	anim.CurrentFrame = animDef.FirstFrame
 	anim.ElapsedTime = 0
@@ -422,15 +496,15 @@ func (as *AnimationSystem) advanceAnimation(anim *AnimationComponent, dt float64
 	if !anim.Playing {
 		return
 	}
-	
+
 	animDef := as.library.GetAnimation(anim.CurrentAnim)
 	anim.ElapsedTime += dt
-	
+
 	// Advance frame if enough time has passed
 	if anim.ElapsedTime >= animDef.FrameTime {
 		anim.ElapsedTime -= animDef.FrameTime
 		anim.CurrentFrame++
-		
+
 		// Handle animation end
 		if anim.CurrentFrame > animDef.LastFrame {
 			if animDef.Loop {

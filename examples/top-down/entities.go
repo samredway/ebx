@@ -13,13 +13,12 @@ import (
 // systems
 
 // NewPlayer generates a new Player entity. Player is usually going to be
-// unique in that the state component is handled by the input system so
+// unique in that the movement component is handled by the input system so
 // normally this function should only be called once in a game
 func NewPlayer(
 	idGen engine.IdGen,
 	render *engine.RenderSystem,
 	pos *engine.PositionStore,
-	state *engine.StateStore,
 	anim *engine.AnimationSystem,
 	mov *engine.MovementSystem,
 	inp *engine.UserInputSystem,
@@ -47,11 +46,17 @@ func NewPlayer(
 	// Attach to camera
 	render.SetCamTarget(pId)
 
-	// Player state
-	pState := engine.NewDefaultStateComponent(pId)
-	state.Attach(pState)
+	// Player movement
+	pMov := &engine.MovementComponent{
+		ComponentBase: engine.ComponentBase{EntityId: pId},
+		Speed:         200.0,
+		DesiredDir:    geom.Vec2I{X: 0, Y: 0}, // No input yet
+		FacingDir:     geom.Vec2I{X: 0, Y: 1}, // Default facing down
+		IsMoving:      false,
+	}
+	mov.Attach(pMov)
 
-	// Player animation (CurrentFrame will be set by AnimationSystem based on FirstFrame)
+	// Player animation
 	pAnim := &engine.AnimationComponent{
 		ComponentBase: engine.ComponentBase{EntityId: pId},
 		CurrentAnim:   "idle_down",
@@ -61,13 +66,6 @@ func NewPlayer(
 	}
 	anim.Attach(pAnim)
 
-	// Player movement
-	pMov := &engine.MovementComponent{
-		ComponentBase: engine.ComponentBase{EntityId: pId},
-		Speed:         200.0,
-	}
-	mov.Attach(pMov)
-
 	// Attach Player to the UserInputSystem
-	inp.Attach(pState)
+	inp.Attach(pMov)
 }

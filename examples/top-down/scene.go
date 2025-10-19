@@ -20,7 +20,6 @@ type ExampleScene struct {
 	ids          engine.IdGen
 	camera       *camera.Camera
 	posStore     *engine.PositionStore
-	stateStore   *engine.StateStore
 	animLibrary  *engine.AnimationLibrary
 	renderSys    *engine.RenderSystem
 	animationSys *engine.AnimationSystem
@@ -35,7 +34,6 @@ type ExampleScene struct {
 func (es *ExampleScene) OnEnter() {
 	es.ids = engine.IdGen{}
 	es.posStore = engine.NewPositionStore()
-	es.stateStore = engine.NewStateStore()
 	es.animLibrary = engine.NewAnimationLibrary()
 
 	// Create assets and load tilemap (tilemap will load its own tilesets automatically)
@@ -164,57 +162,107 @@ func (es *ExampleScene) OnEnter() {
 	
 	animStateMachine := engine.NewAnimationStateMachine(stateIdleDown)
 	
-	// Idle transitions (when not moving)
-	animStateMachine.AddTransition(stateIdleDown, stateWalkDown, 
-		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.Y > 0 }, 10)
-	animStateMachine.AddTransition(stateIdleUp, stateWalkUp, 
-		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.Y < 0 }, 10)
-	animStateMachine.AddTransition(stateIdleLeft, stateWalkLeft, 
-		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X < 0 }, 10)
-	animStateMachine.AddTransition(stateIdleRight, stateWalkRight, 
-		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X > 0 }, 10)
+	// Helper to check direction (pure directions only, not diagonals)
+	isMovingLeft := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.X < 0 && m.FacingDir.Y == 0
+	}
+	isMovingRight := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.X > 0 && m.FacingDir.Y == 0
+	}
+	isMovingUp := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.Y < 0 && m.FacingDir.X == 0
+	}
+	isMovingDown := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.Y > 0 && m.FacingDir.X == 0
+	}
 	
-	// Walk transitions (when moving)
-	animStateMachine.AddTransition(stateWalkDown, stateIdleDown, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.Y > 0 }, 10)
-	animStateMachine.AddTransition(stateWalkUp, stateIdleUp, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.Y < 0 }, 10)
-	animStateMachine.AddTransition(stateWalkLeft, stateIdleLeft, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X < 0 }, 10)
-	animStateMachine.AddTransition(stateWalkRight, stateIdleRight, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X > 0 }, 10)
+	// Diagonal movement helpers (for when both axes are active)
+	isMovingUpLeft := func(id engine.EntityId) bool {
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.X < 0 && m.FacingDir.Y < 0
+	}
+	isMovingUpRight := func(id engine.EntityId) bool {
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.X > 0 && m.FacingDir.Y < 0
+	}
+	isMovingDownLeft := func(id engine.EntityId) bool {
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.X < 0 && m.FacingDir.Y > 0
+	}
+	isMovingDownRight := func(id engine.EntityId) bool {
+		m := es.moveSys.GetMovement(id)
+		return m != nil && m.IsMoving && m.FacingDir.X > 0 && m.FacingDir.Y > 0
+	}
 	
-	// Direction changes while idle
-	animStateMachine.AddTransition(stateIdleDown, stateIdleUp, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.Y < 0 }, 5)
-	animStateMachine.AddTransition(stateIdleDown, stateIdleLeft, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X < 0 }, 5)
-	animStateMachine.AddTransition(stateIdleDown, stateIdleRight, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X > 0 }, 5)
-	// (Add similar for other idle states...)
+	// From ANY idle state, can transition to ANY walk state based on direction
+	idleStates := []engine.AnimationState{stateIdleLeft, stateIdleRight, stateIdleUp, stateIdleDown}
+	for _, idleState := range idleStates {
+		animStateMachine.AddTransition(idleState, stateWalkLeft, isMovingLeft, 10)
+		animStateMachine.AddTransition(idleState, stateWalkRight, isMovingRight, 10)
+		animStateMachine.AddTransition(idleState, stateWalkUp, isMovingUp, 10)
+		animStateMachine.AddTransition(idleState, stateWalkDown, isMovingDown, 10)
+	}
 	
-	// Direction changes while walking
-	animStateMachine.AddTransition(stateWalkDown, stateWalkUp, 
-		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.Y < 0 }, 5)
-	animStateMachine.AddTransition(stateWalkDown, stateWalkLeft, 
-		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X < 0 }, 5)
-	animStateMachine.AddTransition(stateWalkDown, stateWalkRight, 
-		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X > 0 }, 5)
-	// (Add similar for other walk states...)
+	// Helper to check if stopped in a direction (any component in that direction)
+	isStoppedLeft := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && !m.IsMoving && m.FacingDir.X < 0 
+	}
+	isStoppedRight := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && !m.IsMoving && m.FacingDir.X > 0 
+	}
+	isStoppedUp := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && !m.IsMoving && m.FacingDir.Y < 0 
+	}
+	isStoppedDown := func(id engine.EntityId) bool { 
+		m := es.moveSys.GetMovement(id)
+		return m != nil && !m.IsMoving && m.FacingDir.Y > 0 
+	}
+	
+	// From ANY walk state, can transition to ANY idle state based on direction
+	walkStates := []engine.AnimationState{stateWalkLeft, stateWalkRight, stateWalkUp, stateWalkDown}
+	for _, walkState := range walkStates {
+		animStateMachine.AddTransition(walkState, stateIdleLeft, isStoppedLeft, 10)
+		animStateMachine.AddTransition(walkState, stateIdleRight, isStoppedRight, 10)
+		animStateMachine.AddTransition(walkState, stateIdleUp, isStoppedUp, 10)
+		animStateMachine.AddTransition(walkState, stateIdleDown, isStoppedDown, 10)
+	}
+	
+	// Walk-to-walk transitions (for direction changes while moving)
+	// Check pure directions first (higher priority), then diagonals
+	for _, walkState := range walkStates {
+		// Pure cardinal directions (highest priority)
+		animStateMachine.AddTransition(walkState, stateWalkUp, isMovingUp, 10)
+		animStateMachine.AddTransition(walkState, stateWalkDown, isMovingDown, 10)
+		animStateMachine.AddTransition(walkState, stateWalkLeft, isMovingLeft, 10)
+		animStateMachine.AddTransition(walkState, stateWalkRight, isMovingRight, 10)
+		
+		// Diagonals - prioritize Y-axis (up/down) over X-axis (left/right)
+		animStateMachine.AddTransition(walkState, stateWalkUp, isMovingUpLeft, 8)
+		animStateMachine.AddTransition(walkState, stateWalkUp, isMovingUpRight, 8)
+		animStateMachine.AddTransition(walkState, stateWalkDown, isMovingDownLeft, 8)
+		animStateMachine.AddTransition(walkState, stateWalkDown, isMovingDownRight, 8)
+	}
 
 	// Setup core systems
-	es.animationSys = engine.NewAnimationSystem(es.stateStore, es.animLibrary, animStateMachine)
+	es.moveSys = engine.NewMovementSystem(es.posStore, es.tileMap, 1)
+	es.animationSys = engine.NewAnimationSystem(es.animLibrary, animStateMachine)
 	es.renderSys = engine.NewRenderSystem(
 		es.posStore,
 		es.camera,
 		es.tileMap,
 		es.animationSys, // AnimationSystem implements AnimationProvider
 	)
-	es.moveSys = engine.NewMovementSystem(es.posStore, es.stateStore, es.tileMap, 1)
 	es.userInputSys = &engine.UserInputSystem{}
 
 	// Create entities
-	NewPlayer(es.ids, es.renderSys, es.posStore, es.stateStore, es.animationSys, es.moveSys, es.userInputSys)
+	NewPlayer(es.ids, es.renderSys, es.posStore, es.animationSys, es.moveSys, es.userInputSys)
 }
 
 // OnExit is called when the scene is removed from current and allows exit transitions

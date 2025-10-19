@@ -47,8 +47,8 @@ type AnimationStateMachine struct {
 // AnimationTransition defines a transition from one state to another
 type AnimationTransition struct {
 	to        AnimationState
-	condition func(*StateComponent) bool
-	priority  int // Higher priority transitions are checked first
+	condition func(EntityId) bool // Condition checks entity ID, can access any components via closure
+	priority  int                 // Higher priority transitions are checked first
 }
 
 func NewAnimationStateMachine(initialState AnimationState) *AnimationStateMachine {
@@ -58,7 +58,7 @@ func NewAnimationStateMachine(initialState AnimationState) *AnimationStateMachin
 	}
 }
 
-func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, condition func(*StateComponent) bool, priority int) {
+func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, condition func(EntityId) bool, priority int) {
 	sm.transitions[from] = append(sm.transitions[from], AnimationTransition{
 		to:        to,
 		condition: condition,
@@ -67,7 +67,7 @@ func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, conditio
 }
 
 // Update checks transitions and returns the current state
-func (sm *AnimationStateMachine) Update(state *StateComponent) AnimationState {
+func (sm *AnimationStateMachine) Update(entityId EntityId) AnimationState {
 	// Check all transitions from current state
 	transitions := sm.transitions[sm.currentState]
 
@@ -75,7 +75,7 @@ func (sm *AnimationStateMachine) Update(state *StateComponent) AnimationState {
 	var bestTransition *AnimationTransition
 	for i := range transitions {
 		t := &transitions[i]
-		if t.condition(state) {
+		if t.condition(entityId) {
 			if bestTransition == nil || t.priority > bestTransition.priority {
 				bestTransition = t
 			}
@@ -87,10 +87,5 @@ func (sm *AnimationStateMachine) Update(state *StateComponent) AnimationState {
 		sm.currentState = bestTransition.to
 	}
 
-	return sm.currentState
-}
-
-// GetCurrentState returns the current state (useful for debugging or custom logic)
-func (sm *AnimationStateMachine) GetCurrentState() AnimationState {
 	return sm.currentState
 }
