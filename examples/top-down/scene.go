@@ -149,8 +149,16 @@ func (es *ExampleScene) OnEnter() {
 		Loop:        true,
 	})
 
+	// Setup animation state machine for top-down game
+	animStateMachine := engine.NewAnimationStateMachine(engine.AnimStateIdle)
+	// Simple transitions: idle <-> walk (no attack or death for now)
+	animStateMachine.AddTransition(engine.AnimStateIdle, engine.AnimStateWalk, 
+		func(s *engine.StateComponent) bool { return s.IsMoving }, 10)
+	animStateMachine.AddTransition(engine.AnimStateWalk, engine.AnimStateIdle, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving }, 10)
+
 	// Setup core systems
-	es.animationSys = engine.NewAnimationSystem(es.stateStore, es.animLibrary)
+	es.animationSys = engine.NewAnimationSystem(es.stateStore, es.animLibrary, animStateMachine)
 	es.renderSys = engine.NewRenderSystem(
 		es.posStore,
 		es.camera,
