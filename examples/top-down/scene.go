@@ -150,17 +150,57 @@ func (es *ExampleScene) OnEnter() {
 	})
 
 	// Setup animation state machine for top-down game
+	// States ARE the animation names (e.g., "idle_left", "walk_right")
 	const (
-		stateIdle engine.AnimationState = "idle"
-		stateWalk engine.AnimationState = "walk"
+		stateIdleLeft   engine.AnimationState = "idle_left"
+		stateIdleRight  engine.AnimationState = "idle_right"
+		stateIdleUp     engine.AnimationState = "idle_up"
+		stateIdleDown   engine.AnimationState = "idle_down"
+		stateWalkLeft   engine.AnimationState = "walk_left"
+		stateWalkRight  engine.AnimationState = "walk_right"
+		stateWalkUp     engine.AnimationState = "walk_up"
+		stateWalkDown   engine.AnimationState = "walk_down"
 	)
 	
-	animStateMachine := engine.NewAnimationStateMachine(stateIdle)
-	// Simple transitions: idle <-> walk (no attack or death for now)
-	animStateMachine.AddTransition(stateIdle, stateWalk, 
-		func(s *engine.StateComponent) bool { return s.IsMoving }, 10)
-	animStateMachine.AddTransition(stateWalk, stateIdle, 
-		func(s *engine.StateComponent) bool { return !s.IsMoving }, 10)
+	animStateMachine := engine.NewAnimationStateMachine(stateIdleDown)
+	
+	// Idle transitions (when not moving)
+	animStateMachine.AddTransition(stateIdleDown, stateWalkDown, 
+		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.Y > 0 }, 10)
+	animStateMachine.AddTransition(stateIdleUp, stateWalkUp, 
+		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.Y < 0 }, 10)
+	animStateMachine.AddTransition(stateIdleLeft, stateWalkLeft, 
+		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X < 0 }, 10)
+	animStateMachine.AddTransition(stateIdleRight, stateWalkRight, 
+		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X > 0 }, 10)
+	
+	// Walk transitions (when moving)
+	animStateMachine.AddTransition(stateWalkDown, stateIdleDown, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.Y > 0 }, 10)
+	animStateMachine.AddTransition(stateWalkUp, stateIdleUp, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.Y < 0 }, 10)
+	animStateMachine.AddTransition(stateWalkLeft, stateIdleLeft, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X < 0 }, 10)
+	animStateMachine.AddTransition(stateWalkRight, stateIdleRight, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X > 0 }, 10)
+	
+	// Direction changes while idle
+	animStateMachine.AddTransition(stateIdleDown, stateIdleUp, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.Y < 0 }, 5)
+	animStateMachine.AddTransition(stateIdleDown, stateIdleLeft, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X < 0 }, 5)
+	animStateMachine.AddTransition(stateIdleDown, stateIdleRight, 
+		func(s *engine.StateComponent) bool { return !s.IsMoving && s.FacingDir.X > 0 }, 5)
+	// (Add similar for other idle states...)
+	
+	// Direction changes while walking
+	animStateMachine.AddTransition(stateWalkDown, stateWalkUp, 
+		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.Y < 0 }, 5)
+	animStateMachine.AddTransition(stateWalkDown, stateWalkLeft, 
+		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X < 0 }, 5)
+	animStateMachine.AddTransition(stateWalkDown, stateWalkRight, 
+		func(s *engine.StateComponent) bool { return s.IsMoving && s.FacingDir.X > 0 }, 5)
+	// (Add similar for other walk states...)
 
 	// Setup core systems
 	es.animationSys = engine.NewAnimationSystem(es.stateStore, es.animLibrary, animStateMachine)

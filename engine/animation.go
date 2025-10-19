@@ -1,10 +1,7 @@
 package engine
 
 import (
-	"fmt"
-
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/samredway/ebx/geom"
 )
 
 // AnimationDef defines a single animation sequence (shared across entities)
@@ -17,7 +14,8 @@ type AnimationDef struct {
 	Loop        bool            // Whether animation loops
 }
 
-// AnimationLibrary stores reusable animation definitions
+// AnimationLibrary stores reusable animation definitions for all entity types
+// e.g., "player_idle_left", "goblin_walk_right", "boss_death"
 type AnimationLibrary struct {
 	animations map[string]*AnimationDef
 }
@@ -42,9 +40,8 @@ type AnimationState string
 
 // AnimationStateMachine manages animation state transitions
 type AnimationStateMachine struct {
-	currentState        AnimationState
-	transitions         map[AnimationState][]AnimationTransition
-	directionalStates   map[AnimationState]bool // States that use direction in animation name
+	currentState AnimationState
+	transitions  map[AnimationState][]AnimationTransition
 }
 
 // AnimationTransition defines a transition from one state to another
@@ -56,17 +53,9 @@ type AnimationTransition struct {
 
 func NewAnimationStateMachine(initialState AnimationState) *AnimationStateMachine {
 	return &AnimationStateMachine{
-		currentState:      initialState,
-		transitions:       map[AnimationState][]AnimationTransition{},
-		directionalStates: map[AnimationState]bool{},
+		currentState: initialState,
+		transitions:  map[AnimationState][]AnimationTransition{},
 	}
-}
-
-// SetDirectional marks a state as directional (animation name includes direction)
-// By default, all states are directional. Call this with false for states like "death"
-// that should not include direction in the animation name.
-func (sm *AnimationStateMachine) SetDirectional(state AnimationState, directional bool) {
-	sm.directionalStates[state] = directional
 }
 
 func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, condition func(*StateComponent) bool, priority int) {
@@ -77,12 +66,12 @@ func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, conditio
 	})
 }
 
-// Update checks transitions and returns the new state and animation name
-func (sm *AnimationStateMachine) Update(state *StateComponent) (AnimationState, string) {
-	// Check all transitions from current state (sorted by priority)
+// Update checks transitions and returns the current state
+func (sm *AnimationStateMachine) Update(state *StateComponent) AnimationState {
+	// Check all transitions from current state
 	transitions := sm.transitions[sm.currentState]
 
-	// Find highest priority transition that's valid
+	// Find highest priority valid transition
 	var bestTransition *AnimationTransition
 	for i := range transitions {
 		t := &transitions[i]
@@ -98,45 +87,10 @@ func (sm *AnimationStateMachine) Update(state *StateComponent) (AnimationState, 
 		sm.currentState = bestTransition.to
 	}
 
-	// Build animation name from state + direction
-	animName := sm.buildAnimationName(sm.currentState, state.FacingDir)
-
-	return sm.currentState, animName
+	return sm.currentState
 }
 
-func (sm *AnimationStateMachine) buildAnimationName(state AnimationState, dir geom.Vec2I) string {
-	// Check if this state uses direction (default is true if not specified)
-	directional, exists := sm.directionalStates[state]
-	if !exists {
-		directional = true // Default: use direction
-	}
-	
-	if !directional {
-		// Non-directional animation (e.g., "death")
-		return string(state)
-	}
-	
-	// Directional animation: state + direction
-	dirStr := DirectionToString(dir)
-	return fmt.Sprintf("%s_%s", state, dirStr)
-}
-
-// DirectionToString converts a Vec2I direction to a string suffix for animation names
-// This is exported so users can use it when building custom animation logic
-func DirectionToString(dir geom.Vec2I) string {
-	// Prioritize cardinal directions (X over Y)
-	if dir.X < 0 {
-		return "left"
-	}
-	if dir.X > 0 {
-		return "right"
-	}
-	if dir.Y < 0 {
-		return "up"
-	}
-	if dir.Y > 0 {
-		return "down"
-	}
-	// Default to down if no direction
-	return "down"
+// GetCurrentState returns the current state (useful for debugging or custom logic)
+func (sm *AnimationStateMachine) GetCurrentState() AnimationState {
+	return sm.currentState
 }

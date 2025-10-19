@@ -350,10 +350,11 @@ func (uis *UserInputSystem) Attach(state *StateComponent) {
 // AnimationSystem updates animation state based on entity state
 // It acts as the arbiter for which animation should play based on state priority
 //
-// NOTE: Unlike other systems, AnimationSystem uses a map for both iteration and lookup.
+// Unlike other systems, AnimationSystem uses a map for both iteration and lookup.
 // This trades slightly slower iteration (map vs slice) for simpler code - no need to
 // maintain two data structures in sync. Given our pointer-based architecture, the
-// performance difference is negligible, and we need O(1) lookup for GetCurrentImage anyway.
+// performance difference is negligible, and we need O(1) lookup for GetCurrentImage
+// anyway.
 type AnimationSystem struct {
 	components   map[EntityId]*AnimationComponent
 	stateStore   *StateStore
@@ -385,47 +386,58 @@ func (as *AnimationSystem) Detach(ids ...EntityId) {
 func (as *AnimationSystem) Update(dt float64) {
 	for _, anim := range as.components {
 		state := as.stateStore.GetState(anim.EntityId)
-
-		// Use state machine to determine animation
-		_, desiredAnim := as.stateMachine.Update(state)
-
-		// Switch animation if needed (check this FIRST, before getting current animDef)
+		
+		// Determine desired animation from state machine
+		desiredAnim := string(as.stateMachine.Update(state))
+		
+		// Switch animation if needed
 		if desiredAnim != anim.CurrentAnim {
-			anim.CurrentAnim = desiredAnim
-			animDef := as.library.GetAnimation(anim.CurrentAnim)
-			if animDef == nil {
-				// Animation doesn't exist, stop playing so fallback image is used
-				anim.Playing = false
-				continue
+			if !as.switchAnimation(anim, desiredAnim) {
+				continue // Animation doesn't exist, skip to next entity
 			}
-			anim.CurrentFrame = animDef.FirstFrame
-			anim.ElapsedTime = 0
-			anim.Playing = true
 		}
+		
+		// Advance current animation
+		as.advanceAnimation(anim, dt)
+	}
+}
 
-		// Get current animation definition for frame advancement
-		animDef := as.library.GetAnimation(anim.CurrentAnim)
-		if animDef == nil || !anim.Playing {
-			// Animation doesn't exist or not playing, skip frame advancement
-			continue
-		}
+// switchAnimation changes the current animation, returns false if animation doesn't exist
+func (as *AnimationSystem) switchAnimation(anim *AnimationComponent, animName string) bool {
+	animDef := as.library.GetAnimation(animName)
+	if animDef == nil {
+		anim.Playing = false
+		return false
+	}
+	
+	anim.CurrentAnim = animName
+	anim.CurrentFrame = animDef.FirstFrame
+	anim.ElapsedTime = 0
+	anim.Playing = true
+	return true
+}
 
-		// Advance time
-		anim.ElapsedTime += dt
-
-		// Check if we need to advance frame
-		if anim.ElapsedTime >= animDef.FrameTime {
-			anim.ElapsedTime -= animDef.FrameTime
-			anim.CurrentFrame++
-
-			// Handle end of animation
-			if anim.CurrentFrame > animDef.LastFrame {
-				if animDef.Loop {
-					anim.CurrentFrame = animDef.FirstFrame
-				} else {
-					anim.CurrentFrame = animDef.LastFrame
-					anim.Playing = false
-				}
+// advanceAnimation updates frame based on elapsed time
+func (as *AnimationSystem) advanceAnimation(anim *AnimationComponent, dt float64) {
+	if !anim.Playing {
+		return
+	}
+	
+	animDef := as.library.GetAnimation(anim.CurrentAnim)
+	anim.ElapsedTime += dt
+	
+	// Advance frame if enough time has passed
+	if anim.ElapsedTime >= animDef.FrameTime {
+		anim.ElapsedTime -= animDef.FrameTime
+		anim.CurrentFrame++
+		
+		// Handle animation end
+		if anim.CurrentFrame > animDef.LastFrame {
+			if animDef.Loop {
+				anim.CurrentFrame = animDef.FirstFrame
+			} else {
+				anim.CurrentFrame = animDef.LastFrame
+				anim.Playing = false
 			}
 		}
 	}
