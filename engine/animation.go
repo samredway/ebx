@@ -35,7 +35,7 @@ func (al *AnimationLibrary) GetAnimation(name string) *AnimationDef {
 }
 
 // AnimationState represents a state in the animation state machine
-// Users define their own states as strings (e.g., "idle", "walk", "jump", "attack")
+// Users define their own states as strings (e.g., "idle", "walk_left" etc)
 type AnimationState string
 
 // AnimationStateMachine manages animation state transitions
@@ -47,7 +47,7 @@ type AnimationStateMachine struct {
 // AnimationTransition defines a transition from one state to another
 type AnimationTransition struct {
 	to        AnimationState
-	condition func(EntityId) bool // Condition checks entity ID, can access any components via closure
+	condition func(EntityId) bool // fn checks if transition should occur
 	priority  int                 // Higher priority transitions are checked first
 }
 
@@ -58,7 +58,11 @@ func NewAnimationStateMachine(initialState AnimationState) *AnimationStateMachin
 	}
 }
 
-func (sm *AnimationStateMachine) AddTransition(from, to AnimationState, condition func(EntityId) bool, priority int) {
+func (sm *AnimationStateMachine) AddTransition(
+	from, to AnimationState,
+	condition func(EntityId) bool,
+	priority int,
+) {
 	sm.transitions[from] = append(sm.transitions[from], AnimationTransition{
 		to:        to,
 		condition: condition,
