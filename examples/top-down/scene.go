@@ -32,6 +32,7 @@ func (es *ExampleScene) OnEnter() {
 		panic(fmt.Errorf("Unable to load tilemap %w", err))
 	}
 	es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Idle.png", 16, 16)
+	es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Walk.png", 16, 16)
 
 	// Create player enity -----------------------------------------------------
 	player := NewPlayer(es.assets)
