@@ -8,7 +8,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/samredway/ebx/assetmgr"
 	"github.com/samredway/ebx/camera"
-	"github.com/samredway/ebx/collections"
 	"github.com/samredway/ebx/geom"
 )
 
@@ -16,120 +15,51 @@ import (
 // when resolving collisions, avoiding player jitter against walls.
 const collisionEpsilon = 0.001
 
-// PositionStore has no update but acts as a store for position component
-// that gets updated by movement system and read from by some others like
-// render and collision
-type PositionStore struct {
-	positions map[EntityId]*PositionComponent
-}
-
-func NewPositionStore() *PositionStore {
-	return &PositionStore{
-		positions: map[EntityId]*PositionComponent{},
-	}
-}
-
-func (ps *PositionStore) GetPosition(id EntityId) *PositionComponent {
-	pos, ok := ps.positions[id]
-	if !ok {
-		panic("Position id does not exist")
-	}
-	return pos
-}
-
-func (ps *PositionStore) Attach(comps ...*PositionComponent) {
-	for _, comp := range comps {
-		ps.positions[comp.EntityId] = comp
-	}
-}
-
-func (ps *PositionStore) Detach(comps ...*PositionComponent) {
-	for _, comp := range comps {
-		delete(ps.positions, comp.EntityId)
-	}
-}
-
-// SystemBase is a generic base for all system classes with the key methods for
-// attach and detach definied and the slice of components required for interation
-type SystemBase[C Component] struct {
-	components []C
-	remove     collections.Set[EntityId]
-}
-
-func NewSystemBase[C Component]() *SystemBase[C] {
-	return &SystemBase[C]{
-		components: []C{},
-		remove:     collections.Set[EntityId]{},
-	}
-}
-
-func (sb *SystemBase[C]) Attach(comp ...C) {
-	sb.components = append(sb.components, comp...)
-}
-
-func (sb *SystemBase[C]) Detach(ids ...EntityId) {
-	for _, id := range ids {
-		sb.remove.Add(id)
-	}
-}
-
-func (sb *SystemBase[C]) Update(dt float64) {
-	// Point a new slice handle to the underlaying components array but with 0 length
-	active := sb.components[:0]
-
-	for _, c := range sb.components {
-		// Remove and compact those on the remove list
-		if sb.remove.Has(c.GetEntityId()) {
-			sb.remove.Remove(c.GetEntityId())
-			continue
-		}
-		active = append(active, c)
-	}
-
-	// Remove any potential ids that do no longer exist
-	sb.remove.Clear()
-
-	// Reattach the slice handle to the underlying array so it re-indexes and gets
-	// the correct new length
-	sb.components = active
-}
-
-// AnimationProvider is an interface for getting current animation frame for an entity
-type AnimationProvider interface {
-	GetCurrentImage(id EntityId) *ebiten.Image
-}
-
 // RenderSystem gets run in the Scene.Draw() method
 type RenderSystem struct {
-	*SystemBase[*RenderComponent]
-	positions         *PositionStore
-	camera            *camera.Camera
-	tileMap           *assetmgr.TileMap
-	animationProvider AnimationProvider
-	camTarget         EntityId
+	entities  *EntityManager
+	camera    *camera.Camera
+	tileMap   *assetmgr.TileMap
+	camTarget *Entity // Entity for camera to center on (usaully Player)
 }
 
 func NewRenderSystem(
-	pos *PositionStore,
+	ents *EntityManager,
 	cam *camera.Camera,
-	tileMap *assetmgr.TileMap,
-	animationProvider AnimationProvider,
+	camT *Entity,
+	tiles *assetmgr.TileMap,
 ) *RenderSystem {
 	return &RenderSystem{
-		SystemBase:        NewSystemBase[*RenderComponent](),
-		positions:         pos,
-		camera:            cam,
-		tileMap:           tileMap,
-		animationProvider: animationProvider,
+		entities:  ents,
+		camera:    cam,
+		camTarget: camT,
+		tileMap:   tiles,
 	}
 }
 
+// Draw draws entities and tiles to screen
 func (rs *RenderSystem) Draw(screen *ebiten.Image) {
-	pPos := rs.positions.GetPosition(rs.camTarget)
-	rs.camera.CentreOn(pPos.Vec2)
+	if rs.camTarget.Position == nil && rs.camTarget == nil {
+		panic("Camera target has not been set")
+	}
+	rs.camera.CentreOn(rs.camTarget.Position.Vec2)
 
-	// Draw tiles first -----
+	// Draw tiles first
+	rs.drawTiles(screen)
 
+	// Draw enitities
+	rs.entities.Each(func(e *Entity) {
+		if e.Position == nil || e.Render == nil {
+			return
+		}
+		if e.Render.Img == nil {
+			panic(fmt.Errorf("Entity %s does not have image", e.Name))
+		}
+		rs.drawToScreen(e.Position.Vec2, e.Render.Img, screen)
+	})
+}
+
+func (rs *RenderSystem) drawTiles(screen *ebiten.Image) {
 	// Find the rectangle that the viewport covers as a rect on the tileMap
 	// by coverting world cooridanates to tile coords
 	offsetX := int(rs.camera.X)
@@ -165,28 +95,6 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 			panic(fmt.Sprintf("Failed to iterate tiles in layer %d: %v", layer, err))
 		}
 	}
-
-	// Draw enitities -----
-	for _, r := range rs.components {
-		pos := rs.positions.GetPosition(r.GetEntityId())
-		img := rs.getEntityImage(r)
-		rs.drawToScreen(pos.Vec2, img, screen)
-	}
-}
-
-// getEntityImage returns the current image for an entity (animated or static)
-func (rs *RenderSystem) getEntityImage(r *RenderComponent) *ebiten.Image {
-	// Try to get animated image first
-	if rs.animationProvider != nil {
-		if img := rs.animationProvider.GetCurrentImage(r.GetEntityId()); img != nil {
-			return img
-		}
-	}
-	// Fall back to static image
-	if (r.Img) == nil {
-		panic(fmt.Sprintf("Entity with id %d does not have any image", r.EntityId))
-	}
-	return r.Img
 }
 
 func (rs *RenderSystem) drawToScreen(
@@ -212,45 +120,22 @@ func (rs *RenderSystem) drawToScreen(
 	screen.DrawImage(img, opts)
 }
 
-func (rs *RenderSystem) SetCamTarget(id EntityId) {
-	rs.camTarget = id
-}
-
 // MovementSystem handles updating position component for corresponding entity
 // based on movement data
 // MovementSystem updates entity positions based on movement components
 // Uses a map for both iteration and O(1) lookup via GetMovement()
 type MovementSystem struct {
-	components     map[EntityId]*MovementComponent
-	pos            *PositionStore
+	entities       *EntityManager
 	tileMap        *assetmgr.TileMap
-	collisionLayer int // TODO: crude to pass this here? thinking ...
+	collisionLayer int
 }
 
-func NewMovementSystem(pos *PositionStore, tileMap *assetmgr.TileMap, collLayer int) *MovementSystem {
+func NewMovementSystem(ents *EntityManager, tiles *assetmgr.TileMap, collLayer int) *MovementSystem {
 	return &MovementSystem{
-		components:     map[EntityId]*MovementComponent{},
-		pos:            pos,
-		tileMap:        tileMap,
+		entities:       ents,
+		tileMap:        tiles,
 		collisionLayer: collLayer,
 	}
-}
-
-func (ms *MovementSystem) Attach(comps ...*MovementComponent) {
-	for _, comp := range comps {
-		ms.components[comp.EntityId] = comp
-	}
-}
-
-func (ms *MovementSystem) Detach(ids ...EntityId) {
-	for _, id := range ids {
-		delete(ms.components, id)
-	}
-}
-
-// GetMovement returns the movement component for an entity (O(1) lookup)
-func (ms *MovementSystem) GetMovement(id EntityId) *MovementComponent {
-	return ms.components[id]
 }
 
 func (ms *MovementSystem) Update(dt float64) {
@@ -258,13 +143,18 @@ func (ms *MovementSystem) Update(dt float64) {
 	tw := float64(ms.tileMap.TileW())
 	th := float64(ms.tileMap.TileH())
 
-	for _, m := range ms.components {
-		pos := ms.pos.GetPosition(m.GetEntityId())
+	ms.entities.Each(func(e *Entity) {
+		m := e.Movement
+		pos := e.Position
+
+		if m == nil || pos == nil {
+			return
+		}
 
 		// Check if there's any desired movement
 		if m.DesiredDir.X == 0 && m.DesiredDir.Y == 0 {
 			m.IsMoving = false
-			continue
+			return
 		}
 
 		// Normalize desired direction to prevent faster diagonal movement
@@ -311,7 +201,7 @@ func (ms *MovementSystem) Update(dt float64) {
 				m.FacingDir.Y = 0
 			}
 		}
-	}
+	})
 }
 
 // resolveXAxis moves along the X axis and clamps on collision.
@@ -383,151 +273,4 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (flo
 		}
 	}
 	return posX, newY
-}
-
-// InputSystem handles user input and applies it to a given movement component
-// NOTE: InputSystem has a slightly different interface to other systems as it really
-// only handles one component although it could easily be updated to match the
-// others later if required
-// NOTE: This is probably not very extensible but its hard for me to think how to
-// really generalise this right now. Will probalby come back to this and give it a
-// bit more thought. We will want other types of system that can update movement and
-// initialse other types of actions like shooting eg EnemyTypeXAiInputSystem. I think
-// this is something I will iterate on and figure out as I go.
-type UserInputSystem struct {
-	PlayerMovement *MovementComponent
-}
-
-func (uis *UserInputSystem) Update(dt float64) {
-	directionX := 0
-	directionY := 0
-
-	if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
-		directionX -= 1
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) {
-		directionX += 1
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
-		directionY -= 1
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) {
-		directionY += 1
-	}
-
-	// Set desired direction from input (intent to move)
-	// MovementSystem will update FacingDir and IsMoving based on actual movement
-	uis.PlayerMovement.DesiredDir.X = directionX
-	uis.PlayerMovement.DesiredDir.Y = directionY
-}
-
-func (uis *UserInputSystem) Attach(movement *MovementComponent) {
-	uis.PlayerMovement = movement
-}
-
-// AnimationSystem updates animation state based on entity state
-// It acts as the arbiter for which animation should play based on state priority
-//
-// Unlike other systems, AnimationSystem uses a map for both iteration and lookup.
-// This trades slightly slower iteration (map vs slice) for simpler code - no need to
-// maintain two data structures in sync. Given our pointer-based architecture, the
-// performance difference is negligible, and we need O(1) lookup for GetCurrentImage
-// anyway.
-type AnimationSystem struct {
-	components   map[EntityId]*AnimationComponent
-	library      *AnimationLibrary
-	stateMachine *AnimationStateMachine
-}
-
-func NewAnimationSystem(library *AnimationLibrary, stateMachine *AnimationStateMachine) *AnimationSystem {
-	return &AnimationSystem{
-		components:   map[EntityId]*AnimationComponent{},
-		library:      library,
-		stateMachine: stateMachine,
-	}
-}
-
-func (as *AnimationSystem) Attach(comps ...*AnimationComponent) {
-	for _, comp := range comps {
-		as.components[comp.EntityId] = comp
-	}
-}
-
-func (as *AnimationSystem) Detach(ids ...EntityId) {
-	for _, id := range ids {
-		delete(as.components, id)
-	}
-}
-
-func (as *AnimationSystem) Update(dt float64) {
-	for _, anim := range as.components {
-		// Determine desired animation from state machine
-		desiredAnim := string(as.stateMachine.Update(anim.EntityId))
-
-		// Switch animation if needed
-		if desiredAnim != anim.CurrentAnim {
-			if !as.switchAnimation(anim, desiredAnim) {
-				continue // Animation doesn't exist, skip to next entity
-			}
-		}
-
-		// Advance current animation
-		as.advanceAnimation(anim, dt)
-	}
-}
-
-// switchAnimation changes the current animation, returns false if animation doesn't exist
-func (as *AnimationSystem) switchAnimation(anim *AnimationComponent, animName string) bool {
-	animDef := as.library.GetAnimation(animName)
-	if animDef == nil {
-		anim.Playing = false
-		return false
-	}
-
-	anim.CurrentAnim = animName
-	anim.CurrentFrame = animDef.FirstFrame
-	anim.ElapsedTime = 0
-	anim.Playing = true
-	return true
-}
-
-// advanceAnimation updates frame based on elapsed time
-func (as *AnimationSystem) advanceAnimation(anim *AnimationComponent, dt float64) {
-	if !anim.Playing {
-		return
-	}
-
-	animDef := as.library.GetAnimation(anim.CurrentAnim)
-	anim.ElapsedTime += dt
-
-	// Advance frame if enough time has passed
-	if anim.ElapsedTime >= animDef.FrameTime {
-		anim.ElapsedTime -= animDef.FrameTime
-		anim.CurrentFrame++
-
-		// Handle animation end
-		if anim.CurrentFrame > animDef.LastFrame {
-			if animDef.Loop {
-				anim.CurrentFrame = animDef.FirstFrame
-			} else {
-				anim.CurrentFrame = animDef.LastFrame
-				anim.Playing = false
-			}
-		}
-	}
-}
-
-// GetCurrentImage implements AnimationProvider interface
-func (as *AnimationSystem) GetCurrentImage(id EntityId) *ebiten.Image {
-	anim, ok := as.components[id]
-	if !ok || !anim.Playing {
-		return nil
-	}
-
-	animDef := as.library.GetAnimation(anim.CurrentAnim)
-	if animDef == nil {
-		return nil
-	}
-
-	return animDef.SpriteSheet[anim.CurrentFrame]
 }

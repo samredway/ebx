@@ -59,6 +59,10 @@ func (a *Assets) AddImage(imgName string, img *ebiten.Image) {
 	a.imgs[imgName] = img
 }
 
+// LoadTileSetFromFS will load form the given file system (see doc at top of file)
+// name: name of the tileset as stated in your .tmx file
+// path: path within your fs.FS object to png file
+// frameW, frameH: the tile size in px
 func (a *Assets) LoadTileSetFromFS(fsys fs.FS, name, path string, frameW, frameH int) error {
 	sheet, err := loadEbitenImage(fsys, path)
 	if err != nil {

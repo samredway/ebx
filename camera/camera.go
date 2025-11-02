@@ -10,8 +10,8 @@ import (
 // viewport coords
 type Camera struct {
 	geom.Vec2                 // X, Y world coord
-	viewport  geom.Size       // viewport size
-	bounds    image.Rectangle // Bounding box of whole world
+	viewport  geom.Size       // viewport size px
+	bounds    image.Rectangle // Bounding box of whole world px
 	Zoom      float64         // Zoom level (1.0 = normal, 2.0 = 2x zoom, etc.)
 }
 
