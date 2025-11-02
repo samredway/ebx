@@ -5,16 +5,79 @@ import (
 	"github.com/samredway/ebx/geom"
 )
 
-// Entity is just an ID that allows groups of components to be matched together
-type EntityId int
-
-type IdGen struct {
-	last EntityId
+// PositionComponent holds entity's position coords only
+type PositionComponent struct {
+	geom.Vec2 // X, Y
+	geom.Size // W, H
 }
 
-func (ig *IdGen) Next() EntityId {
-	ig.last++
-	return ig.last
+// MovementComponent holds entity's movement state
+type MovementComponent struct {
+	Speed      float64
+	DesiredDir geom.Vec2I // Direction intent (-1, 0, 1) - set by input system
+	FacingDir  geom.Vec2I // Actual direction (-1, 0, 1) - set by movement system
+	IsMoving   bool       // Whether entity moved this frame - set by movement system
+}
+
+// RenderComponent holds current image
+type RenderComponent struct {
+	Img *ebiten.Image
+}
+
+// Used to give entity specific custom behaviour to manage stuff like animations
+// inputs/AI etc
+type Script interface {
+	Update(*Entity, float64)
+}
+
+// Entity game entity type
+type Entity struct {
+	Name     string
+	Position *PositionComponent
+	Movement *MovementComponent
+	Render   *RenderComponent
+	Script   Script
+	Dead     bool
+}
+
+// EntityManager is a deliberately small abstraction to handle game entities
+type EntityManager struct {
+	entities []*Entity
+}
+
+func NewEntityManager() *EntityManager {
+	return &EntityManager{entities: []*Entity{}}
+}
+
+// Add adds new entity
+func (em *EntityManager) Add(e *Entity) {
+	em.entities = append(em.entities, e)
+}
+
+// Each is a safe way for systems to run updates on the entity list
+func (em *EntityManager) Each(fn func(*Entity)) {
+	for _, e := range em.entities {
+		fn(e)
+	}
+}
+
+func (em *EntityManager) Update(dt float64) {
+	em.Each(func(e *Entity) {
+		if e.Script != nil {
+			e.Script.Update(e, dt)
+		}
+	})
+}
+
+// RemoveDead removes all entityes marked Dead
+func (em *EntityManager) RemoveDead() {
+	alive := em.entities[:0]
+	for _, e := range em.entities {
+		if !e.Dead {
+			alive = append(alive, e)
+		}
+	}
+	em.entities = alive
 }
 
 // Scene is a level or view like a menu screen for example that has its own
@@ -24,7 +87,7 @@ type Scene interface {
 	OnEnter()
 	OnExit()
 	Draw(*ebiten.Image)
-	Update(float64) Scene
+	Update(float64) (Scene, error)
 	SetViewport(geom.Size)
 }
 
@@ -49,13 +112,13 @@ func NewGame(scene Scene, viewport geom.Size) *Game {
 func (g *Game) Update() error {
 	fps := float64(ebiten.TPS())
 	dt := 1 / fps
-	scene := g.curr.Update(dt)
+	scene, err := g.curr.Update(dt)
 	if scene != nil {
 		g.curr.OnExit()
 		g.curr = scene
 		g.curr.OnEnter()
 	}
-	return nil
+	return err
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {

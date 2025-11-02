@@ -2,56 +2,60 @@ package main
 
 import (
 	"fmt"
+	"image"
 
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/samredway/ebx/assetmgr"
+	"github.com/samredway/ebx/camera"
+	"github.com/samredway/ebx/engine"
 	gameassets "github.com/samredway/ebx/examples/top-down/assets"
-	"github.com/samredway/ebx/topdown"
 )
 
 // ExampleScene demonstrates using the topdown.BaseScene for rapid prototyping
 type ExampleScene struct {
-	topdown.BaseScene
+	engine.BaseScene
+	assets    *assetmgr.Assets
+	tilemap   *assetmgr.TileMap
+	entities  *engine.EntityManager
+	renderSys *engine.RenderSystem
+	moveSys   *engine.MovementSystem
 }
 
 // OnEnter sets up the scene by initializing base systems and creating entities
 func (es *ExampleScene) OnEnter() {
-	// Initialize base scene (tilemap, camera, core systems)
-	// Note: Viewport is already set by engine before OnEnter is called
-	err := es.BaseScene.Init(
-		gameassets.GameFS, // embedded filesystem
-		"example.tmx",     // tilemap file
-		1,                 // collision layer index
-		2.0,               // camera zoom
-	)
+	// Load game assets and tilemap -------------------------------------------
+	es.assets = assetmgr.NewAssets()
+	es.assets.LoadTileSetFromFS(gameassets.GameFS, "Dungeon_floor", "DungeonFloors.png", 16, 16)
+	var err error
+	es.tilemap, err = assetmgr.NewTileMapFromTmx(gameassets.GameFS, "example.tmx", es.assets)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to initialize scene: %v", err))
+		panic(fmt.Errorf("Unable to load tilemap %w", err))
 	}
+	es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Idle.png", 16, 16)
+	es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Walk.png", 16, 16)
 
-	// Load character spritesheets
-	err = es.Assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Idle.png", 16, 16)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to load Character_Idle.png: %v", err))
-	}
-	err = es.Assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Walk.png", 16, 16)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to load Character_Walk.png: %v", err))
-	}
+	// Create player enity -----------------------------------------------------
+	player := NewPlayer(es.assets)
 
-	// Setup animation state machine and initialize animation system
-	animStateMachine := topdown.SetupCharacterStateMachine("player", es.MoveSys)
-	es.InitAnimationSystem(animStateMachine)
+	// Create entity manager and add player
+	es.entities = engine.NewEntityManager()
+	es.entities.Add(player)
 
-	// Create player entity (prefab handles animation setup)
-	_ = NewPlayer(
-		es.IdGen,
-		es.Assets,
-		es.AnimLibrary,
-		es.RenderSys,
-		es.PosStore,
-		es.AnimationSys,
-		es.MoveSys,
-		es.UserInputSys,
-	)
+	// Init systems ------------------------------------------------------------
+	bounds := image.Rect(0, 0, 30*16, 30*16)
+	cam := camera.NewCamera(es.Viewport, bounds)
+	cam.Zoom = 2.0
+	es.renderSys = engine.NewRenderSystem(es.entities, cam, player, es.tilemap)
+	es.moveSys = engine.NewMovementSystem(es.entities, es.tilemap, 1)
 }
 
-// Note: OnExit, Update, Draw, and SetViewport are all handled by topdown.BaseScene
-// Only override them if you need custom behavior
+func (es *ExampleScene) Update(dt float64) (engine.Scene, error) {
+	es.entities.Update(dt)
+	es.moveSys.Update(dt)
+	es.entities.RemoveDead()
+	return nil, nil
+}
+
+func (es *ExampleScene) Draw(screen *ebiten.Image) {
+	es.renderSys.Draw(screen)
+}
