@@ -50,8 +50,8 @@ func (es *ExampleScene) OnEnter() {
 }
 
 func (es *ExampleScene) Update(dt float64) (engine.Scene, error) {
-	es.moveSys.Update(dt)
 	es.entities.Update(dt)
+	es.moveSys.Update(dt)
 	es.entities.RemoveDead()
 	return nil, nil
 }
