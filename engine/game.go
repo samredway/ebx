@@ -45,10 +45,6 @@ type EntityManager struct {
 	entities []*Entity
 }
 
-func NewEntityManager() *EntityManager {
-	return &EntityManager{entities: []*Entity{}}
-}
-
 // Add adds new entity
 func (em *EntityManager) Add(e *Entity) {
 	em.entities = append(em.entities, e)
@@ -80,6 +76,10 @@ func (em *EntityManager) RemoveDead() {
 	em.entities = alive
 }
 
+func NewEntityManager() *EntityManager {
+	return &EntityManager{entities: []*Entity{}}
+}
+
 // Scene is a level or view like a menu screen for example that has its own
 // behviour. If you return a Scene from Update the Game will load in the
 // new scene.
@@ -95,18 +95,6 @@ type Scene interface {
 type Game struct {
 	curr     Scene
 	viewport geom.Size
-}
-
-// NewGame returns a Game object that can run in Ebiten.
-// You can must pass in a Scene argument that is your opening scene along with
-// an Assets object which contains all the assets your game requires
-func NewGame(scene Scene, viewport geom.Size) *Game {
-	scene.SetViewport(viewport)
-	scene.OnEnter()
-	return &Game{
-		curr:     scene,
-		viewport: viewport,
-	}
 }
 
 func (g *Game) Update() error {
@@ -127,4 +115,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return g.viewport.W, g.viewport.H
+}
+
+// NewGame returns a Game object that can run in Ebiten.
+// You can must pass in a Scene argument that is your opening scene along with
+// an Assets object which contains all the assets your game requires
+func NewGame(scene Scene, viewport geom.Size) *Game {
+	scene.SetViewport(viewport)
+	scene.OnEnter()
+	return &Game{
+		curr:     scene,
+		viewport: viewport,
+	}
 }

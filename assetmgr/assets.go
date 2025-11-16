@@ -315,27 +315,6 @@ func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id
 	return nil
 }
 
-// NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
-// It automatically parses referenced .tsx files and loads all tilesets
-func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets *Assets) (*TileMap, error) {
-	m, err := ebitmx.GetEbitenMapFromFS(fsys, pathToTmx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load TMX file %s: %w", pathToTmx, err)
-	}
-
-	tileMap := &TileMap{
-		EbitenMap: m,
-		tilesets:  NewTilesetManager(assets),
-	}
-
-	tmxDir := normalizeTmxDir(pathToTmx)
-	if err := tileMap.loadTilesets(fsys, tmxDir, m.Tilesets); err != nil {
-		return nil, fmt.Errorf("failed to load tilesets for %s: %w", pathToTmx, err)
-	}
-
-	return tileMap, nil
-}
-
 func (tm *TileMap) loadTilesets(fsys fs.FS, tmxDir string, tilesetRefs []ebitmx.TilesetRef) error {
 	for _, tsRef := range tilesetRefs {
 		info, err := tm.loadTileset(fsys, tmxDir, tsRef)
@@ -372,6 +351,27 @@ func (tm *TileMap) loadTileset(fsys fs.FS, tmxDir string, tsRef ebitmx.TilesetRe
 		tileW:     tileset.TileWidth,
 		tileH:     tileset.TileHeight,
 	}, nil
+}
+
+// NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
+// It automatically parses referenced .tsx files and loads all tilesets
+func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets *Assets) (*TileMap, error) {
+	m, err := ebitmx.GetEbitenMapFromFS(fsys, pathToTmx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TMX file %s: %w", pathToTmx, err)
+	}
+
+	tileMap := &TileMap{
+		EbitenMap: m,
+		tilesets:  NewTilesetManager(assets),
+	}
+
+	tmxDir := normalizeTmxDir(pathToTmx)
+	if err := tileMap.loadTilesets(fsys, tmxDir, m.Tilesets); err != nil {
+		return nil, fmt.Errorf("failed to load tilesets for %s: %w", pathToTmx, err)
+	}
+
+	return tileMap, nil
 }
 
 func resolvePath(baseDir, path string) string {

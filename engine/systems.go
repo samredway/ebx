@@ -23,20 +23,6 @@ type RenderSystem struct {
 	camTarget *Entity // Entity for camera to center on (usaully Player)
 }
 
-func NewRenderSystem(
-	ents *EntityManager,
-	cam *camera.Camera,
-	camT *Entity,
-	tiles *assetmgr.TileMap,
-) *RenderSystem {
-	return &RenderSystem{
-		entities:  ents,
-		camera:    cam,
-		camTarget: camT,
-		tileMap:   tiles,
-	}
-}
-
 // Draw draws entities and tiles to screen
 func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	if rs.camTarget.Position == nil && rs.camTarget == nil {
@@ -120,6 +106,20 @@ func (rs *RenderSystem) drawToScreen(
 	screen.DrawImage(img, opts)
 }
 
+func NewRenderSystem(
+	ents *EntityManager,
+	cam *camera.Camera,
+	camT *Entity,
+	tiles *assetmgr.TileMap,
+) *RenderSystem {
+	return &RenderSystem{
+		entities:  ents,
+		camera:    cam,
+		camTarget: camT,
+		tileMap:   tiles,
+	}
+}
+
 // MovementSystem handles updating position component for corresponding entity
 // based on movement data
 // MovementSystem updates entity positions based on movement components
@@ -128,14 +128,6 @@ type MovementSystem struct {
 	entities       *EntityManager
 	tileMap        *assetmgr.TileMap
 	collisionLayer int
-}
-
-func NewMovementSystem(ents *EntityManager, tiles *assetmgr.TileMap, collLayer int) *MovementSystem {
-	return &MovementSystem{
-		entities:       ents,
-		tileMap:        tiles,
-		collisionLayer: collLayer,
-	}
 }
 
 func (ms *MovementSystem) Update(dt float64) {
@@ -272,4 +264,12 @@ func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (flo
 		}
 	}
 	return posX, newY
+}
+
+func NewMovementSystem(ents *EntityManager, tiles *assetmgr.TileMap, collLayer int) *MovementSystem {
+	return &MovementSystem{
+		entities:       ents,
+		tileMap:        tiles,
+		collisionLayer: collLayer,
+	}
 }
