@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 
@@ -18,32 +17,6 @@ type pScript struct {
 	curAnim    string
 	curFrame   int
 	animations map[string][]*ebiten.Image
-}
-
-func NewPScript(assets *assetmgr.Assets) *pScript {
-	a := map[string][]*ebiten.Image{}
-
-	// Setup animations
-	for _, name := range []string{"Idle", "Walk"} {
-		anims, err := assets.GetSpriteSheet(fmt.Sprintf("Character_%s.png", name))
-		if err != nil {
-			panic(fmt.Errorf("Error getting sprite sheet: %w", err))
-		}
-
-		nameLower := strings.ToLower(name)
-
-		a[fmt.Sprintf("%s_left", nameLower)] = anims[0:4]
-		a[fmt.Sprintf("%s_right", nameLower)] = anims[4:8]
-		a[fmt.Sprintf("%s_up", nameLower)] = anims[8:12]
-		a[fmt.Sprintf("%s_down", nameLower)] = anims[12:16]
-	}
-
-	return &pScript{
-		animRate:   0.15,
-		curFrame:   0,
-		curAnim:    "idle_down",
-		animations: a,
-	}
 }
 
 func (ps *pScript) Update(e *engine.Entity, dt float64) {
@@ -109,6 +82,61 @@ func (ps *pScript) updateAnimations(m *engine.MovementComponent, dt float64) {
 	ps.curFrame %= len(ps.animations[ps.curAnim])
 }
 
+func newPScript(assets *assetmgr.Assets) *pScript {
+	a := map[string][]*ebiten.Image{}
+
+	// Setup animations
+	anims, err := assets.GetSpriteSheet("Player")
+	if err != nil {
+		panic("Error retrieving spritesheet 'Player'")
+	}
+
+	// The spritesheet is a 16x16 tile grid with 18 tiles per row.
+	// Each animation row has 6 frames laid out like:
+	//
+	//   E S E E S E E S E E S E E S E E S E
+	//     ^   ^   ^   ^   ^   ^
+	//     6 sprites, each 3 tiles apart, starting at column 1
+	//
+	// Rows with sprites are at tile rows 1,4,7,10,13,16,19,22,...
+	// After splitting into tiles without filtering, the frame indices
+	// we care about in the flat `anims` slice are:
+	//
+	//   idle_down  : 19  + 3*k, k=0..5
+	//   idle_up    : 73  + 3*k
+	//   idle_right : 127 + 3*k
+	//   idle_left  : 181 + 3*k
+	//   walk_down  : 235 + 3*k
+	//   walk_up    : 289 + 3*k
+	//   walk_right : 343 + 3*k
+	//   walk_left  : 397 + 3*k
+	//
+	row := func(start int) []*ebiten.Image {
+		frames := make([]*ebiten.Image, 0, 6)
+		for i := 0; i < 6; i++ {
+			frames = append(frames, anims[start+i*3])
+		}
+		return frames
+	}
+
+	a["idle_down"] = row(19)
+	a["idle_up"] = row(73)
+	a["idle_right"] = row(127)
+	a["idle_left"] = row(181)
+
+	a["walk_down"] = row(235)
+	a["walk_up"] = row(289)
+	a["walk_right"] = row(343)
+	a["walk_left"] = row(397)
+
+	return &pScript{
+		animRate:   0.15,
+		curFrame:   0,
+		curAnim:    "idle_down",
+		animations: a,
+	}
+}
+
 func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
 	pPos := &engine.PositionComponent{
 		Vec2: geom.Vec2{X: 100, Y: 200},
@@ -117,19 +145,19 @@ func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
 
 	pMov := &engine.MovementComponent{Speed: 200}
 
-	pIdle, err := assets.GetSpriteSheet("Character_Idle.png")
+	sprites, err := assets.GetSpriteSheet("Player")
 	if err != nil {
 		panic(fmt.Errorf("Unable to load sprites %w", err))
 	}
 
-	pRen := &engine.RenderComponent{Img: pIdle[0]}
+	pRen := &engine.RenderComponent{Img: sprites[0]}
 
 	player := &engine.Entity{
 		Name:     "Player",
 		Position: pPos,
 		Movement: pMov,
 		Render:   pRen,
-		Script:   NewPScript(assets),
+		Script:   newPScript(assets),
 	}
 
 	return player

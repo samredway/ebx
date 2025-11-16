@@ -31,8 +31,10 @@ func (es *ExampleScene) OnEnter() {
 	if err != nil {
 		panic(fmt.Errorf("Unable to load tilemap %w", err))
 	}
-	es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Idle.png", 16, 16)
-	es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Character_Walk.png", 16, 16)
+	err = es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Player", "Player_sprites.png", 16, 16)
+	if err != nil {
+		panic(fmt.Errorf("Unable to load player sprite sheet"))
+	}
 
 	// Create player enity -----------------------------------------------------
 	player := NewPlayer(es.assets)
@@ -42,7 +44,9 @@ func (es *ExampleScene) OnEnter() {
 	es.entities.Add(player)
 
 	// Init systems ------------------------------------------------------------
-	bounds := image.Rect(0, 0, 30*16, 30*16)
+	mapWidth := es.tilemap.MapWidth * es.tilemap.TileWidth
+	mapHeight := es.tilemap.MapHeight * es.tilemap.TileHeight
+	bounds := image.Rect(0, 0, mapWidth, mapHeight)
 	cam := camera.NewCamera(es.Viewport, bounds)
 	cam.Zoom = 2.0
 	es.renderSys = engine.NewRenderSystem(es.entities, cam, player, es.tilemap)

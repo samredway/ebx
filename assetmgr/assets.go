@@ -28,23 +28,18 @@ import (
 	"math"
 	"path/filepath"
 
-	"github.com/Rulox/ebitmx"
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/samredway/ebx/geom"
+	"github.com/samredway/ebitmx"
 )
+
+// ----------------------------------------------------------------------------
+// Assets
+// ----------------------------------------------------------------------------
 
 type Assets struct {
 	imgs    map[string]*ebiten.Image
 	tiles   map[string][]*ebiten.Image
 	sprites map[string][]*ebiten.Image
-}
-
-func NewAssets() *Assets {
-	return &Assets{
-		imgs:    map[string]*ebiten.Image{},
-		tiles:   map[string][]*ebiten.Image{},
-		sprites: map[string][]*ebiten.Image{},
-	}
 }
 
 func (a *Assets) GetImage(imgName string) (*ebiten.Image, error) {
@@ -84,7 +79,8 @@ func (a *Assets) GetTileSet(name string) ([]*ebiten.Image, error) {
 	return tileSet, nil
 }
 
-func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, path string, frameW, frameH int) error {
+// LoadSpriteSheetFromFS loads a spritesheet from the filesystem object passed in
+func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, name, path string, frameW, frameH int) error {
 	sheet, err := loadEbitenImage(fsys, path)
 	if err != nil {
 		return fmt.Errorf("failed to load sprite sheet %s: %w", path, err)
@@ -93,7 +89,7 @@ func (a *Assets) LoadSpriteSheetFromFS(fsys fs.FS, path string, frameW, frameH i
 	if err != nil {
 		return fmt.Errorf("failed to split sprite sheet %s: %w", path, err)
 	}
-	a.sprites[path] = sprites
+	a.sprites[name] = sprites
 	return nil
 }
 
@@ -103,6 +99,15 @@ func (a *Assets) GetSpriteSheet(name string) ([]*ebiten.Image, error) {
 		return nil, fmt.Errorf("no sprite sheet with name %s", name)
 	}
 	return spriteSheet, nil
+}
+
+// NewAssets is constructor for Assets
+func NewAssets() *Assets {
+	return &Assets{
+		imgs:    map[string]*ebiten.Image{},
+		tiles:   map[string][]*ebiten.Image{},
+		sprites: map[string][]*ebiten.Image{},
+	}
 }
 
 func splitSheet(sheet *ebiten.Image, frameW, frameH int) ([]*ebiten.Image, error) {
@@ -138,6 +143,10 @@ func loadEbitenImage(fsys fs.FS, path string) (*ebiten.Image, error) {
 	return ebiten.NewImageFromImage(img), nil
 }
 
+// ----------------------------------------------------------------------------
+// Tilesets
+// ----------------------------------------------------------------------------
+
 // FirstGid represents the first global tile ID for a tileset in a TMX map
 type FirstGid int
 
@@ -148,27 +157,19 @@ type TilesetInfo struct {
 	tileH     int    // Tile height
 }
 
-// Tilesets manages tileset metadata and tile ID resolution
-type Tilesets struct {
+// TilesetManager manages tileset metadata and tile ID resolution
+type TilesetManager struct {
 	infos  map[FirstGid]TilesetInfo // Tileset metadata keyed by firstGid
 	assets *Assets                  // Reference to assets for loading tile images
 }
 
-// NewTilesets creates a new Tilesets manager
-func NewTilesets(assets *Assets) *Tilesets {
-	return &Tilesets{
-		infos:  map[FirstGid]TilesetInfo{},
-		assets: assets,
-	}
-}
-
 // Add registers a tileset with its firstGid
-func (ts *Tilesets) Add(firstGid FirstGid, info TilesetInfo) {
+func (ts *TilesetManager) Add(firstGid FirstGid, info TilesetInfo) {
 	ts.infos[firstGid] = info
 }
 
 // GetImageForTileId returns the tile image for a given global tile ID
-func (ts *Tilesets) GetImageForTileId(globalId int) (*ebiten.Image, error) {
+func (ts *TilesetManager) GetImageForTileId(globalId int) (*ebiten.Image, error) {
 	if globalId == 0 {
 		return nil, nil // 0 means empty tile
 	}
@@ -202,6 +203,18 @@ func (ts *Tilesets) GetImageForTileId(globalId int) (*ebiten.Image, error) {
 	return tileSet[localId], nil
 }
 
+// NewTilesetManager creates a new Tilesets manager
+func NewTilesetManager(assets *Assets) *TilesetManager {
+	return &TilesetManager{
+		infos:  map[FirstGid]TilesetInfo{},
+		assets: assets,
+	}
+}
+
+// ----------------------------------------------------------------------------
+// TileMap
+// ----------------------------------------------------------------------------
+
 // TileMap represents a whole tilemap - world or level. Currently it is designed
 // to work by loading .tmx files (created in the free and open source Tiled level
 // editor) and has a dependendency on ebitmx
@@ -209,101 +222,27 @@ func (ts *Tilesets) GetImageForTileId(globalId int) (*ebiten.Image, error) {
 // tiled uses ids from 1 not 0 so the ids of the tiles in each layer will be the
 // same as the index + 1 in Assets.tiles
 type TileMap struct {
-	*ebitmx.EbitenMap           // Embedded map data from ebitmx
-	tilesets          *Tilesets // Tileset manager
+	*ebitmx.EbitenMap                 // Embedded map data from ebitmx
+	tilesets          *TilesetManager // Tileset manager
 }
 
-// NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
-// It automatically parses referenced .tsx files and loads all tilesets
-func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets *Assets) (*TileMap, error) {
-	m, err := ebitmx.GetEbitenMapFromFS(fsys, pathToTmx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load TMX file %s: %w", pathToTmx, err)
-	}
-
-	tileMap := &TileMap{
-		EbitenMap: m,
-		tilesets:  NewTilesets(assets),
-	}
-
-	tmxDir := normalizeTmxDir(pathToTmx)
-	if err := tileMap.loadTilesets(fsys, tmxDir, m.Tilesets); err != nil {
-		return nil, fmt.Errorf("failed to load tilesets for %s: %w", pathToTmx, err)
-	}
-
-	return tileMap, nil
-}
-
-func normalizeTmxDir(pathToTmx string) string {
-	tmxDir := filepath.Dir(pathToTmx)
-	if tmxDir == "." {
-		return ""
-	}
-	return tmxDir
-}
-
-func (tm *TileMap) loadTilesets(fsys fs.FS, tmxDir string, tilesetRefs []ebitmx.TilesetRef) error {
-	for _, tsRef := range tilesetRefs {
-		info, err := tm.loadTileset(fsys, tmxDir, tsRef)
-		if err != nil {
-			return err
-		}
-		tm.tilesets.Add(FirstGid(tsRef.FirstGid), info)
-	}
-	return nil
-}
-
-func (tm *TileMap) loadTileset(fsys fs.FS, tmxDir string, tsRef ebitmx.TilesetRef) (TilesetInfo, error) {
-	tsxPath := resolvePath(tmxDir, tsRef.Source)
-
-	tsxBytes, err := fs.ReadFile(fsys, tsxPath)
-	if err != nil {
-		return TilesetInfo{}, fmt.Errorf("failed to read TSX file %s: %w", tsxPath, err)
-	}
-
-	tileset, err := ebitmx.ParseTSX(tsxBytes)
-	if err != nil {
-		return TilesetInfo{}, fmt.Errorf("failed to parse TSX file %s: %w", tsxPath, err)
-	}
-
-	imgPath := resolvePath(tmxDir, tileset.Image.Source)
-	imgFilename := filepath.Base(imgPath)
-
-	if err := tm.tilesets.assets.LoadTileSetFromFS(fsys, imgFilename, imgPath, tileset.TileWidth, tileset.TileHeight); err != nil {
-		return TilesetInfo{}, fmt.Errorf("failed to load tileset image %s: %w", imgPath, err)
-	}
-
-	return TilesetInfo{
-		imgSource: tileset.Image.Source,
-		tileW:     tileset.TileWidth,
-		tileH:     tileset.TileHeight,
-	}, nil
-}
-
-func resolvePath(baseDir, path string) string {
-	if baseDir == "" {
-		return path
-	}
-	return filepath.Join(baseDir, path)
-}
-
-func (tm *TileMap) TileW() int         { return tm.TileWidth }
-func (tm *TileMap) TileH() int         { return tm.TileHeight }
-func (tm *TileMap) NumLayers() int     { return len(tm.Layers) }
-func (tm *TileMap) MapSize() geom.Size { return geom.Size{W: tm.MapWidth, H: tm.MapHeight} }
+// NumLayers returs the number of layers in the tilemap
+func (tm *TileMap) NumLayers() int { return len(tm.Layers) }
 
 // GetImageById returns the tile image for a given global tile ID
 func (tm *TileMap) GetImageById(globalId int) (*ebiten.Image, error) {
 	return tm.tilesets.GetImageForTileId(globalId)
 }
 
+// OverlapsTiles returns true if a position overlaps any tiles in a given layer
+// used to check collision for example
 func (tm *TileMap) OverlapsTiles(x, y, w, h float64, layer int) (bool, error) {
 	if layer < 0 || layer >= len(tm.Layers) {
 		return false, fmt.Errorf("invalid layer index: %d (map has %d layers)", layer, len(tm.Layers))
 	}
 
-	tw := float64(tm.TileW())
-	th := float64(tm.TileH())
+	tw := float64(tm.TileWidth)
+	th := float64(tm.TileHeight)
 
 	tx0 := int(math.Floor(x / tw))
 	ty0 := int(math.Floor(y / th))
@@ -374,4 +313,78 @@ func (tm *TileMap) ForEachIn(area image.Rectangle, layer int, fn func(tx, ty, id
 		}
 	}
 	return nil
+}
+
+// NewTileMapFromTmx loads in the level from a .tmx file (made in Tiled tile editor)
+// It automatically parses referenced .tsx files and loads all tilesets
+func NewTileMapFromTmx(fsys fs.FS, pathToTmx string, assets *Assets) (*TileMap, error) {
+	m, err := ebitmx.GetEbitenMapFromFS(fsys, pathToTmx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TMX file %s: %w", pathToTmx, err)
+	}
+
+	tileMap := &TileMap{
+		EbitenMap: m,
+		tilesets:  NewTilesetManager(assets),
+	}
+
+	tmxDir := normalizeTmxDir(pathToTmx)
+	if err := tileMap.loadTilesets(fsys, tmxDir, m.Tilesets); err != nil {
+		return nil, fmt.Errorf("failed to load tilesets for %s: %w", pathToTmx, err)
+	}
+
+	return tileMap, nil
+}
+
+func (tm *TileMap) loadTilesets(fsys fs.FS, tmxDir string, tilesetRefs []ebitmx.TilesetRef) error {
+	for _, tsRef := range tilesetRefs {
+		info, err := tm.loadTileset(fsys, tmxDir, tsRef)
+		if err != nil {
+			return err
+		}
+		tm.tilesets.Add(FirstGid(tsRef.FirstGid), info)
+	}
+	return nil
+}
+
+func (tm *TileMap) loadTileset(fsys fs.FS, tmxDir string, tsRef ebitmx.TilesetRef) (TilesetInfo, error) {
+	tsxPath := resolvePath(tmxDir, tsRef.Source)
+
+	tsxBytes, err := fs.ReadFile(fsys, tsxPath)
+	if err != nil {
+		return TilesetInfo{}, fmt.Errorf("failed to read TSX file %s: %w", tsxPath, err)
+	}
+
+	tileset, err := ebitmx.ParseTSX(tsxBytes)
+	if err != nil {
+		return TilesetInfo{}, fmt.Errorf("failed to parse TSX file %s: %w", tsxPath, err)
+	}
+
+	imgPath := resolvePath(tmxDir, tileset.Image.Source)
+	imgFilename := filepath.Base(imgPath)
+
+	if err := tm.tilesets.assets.LoadTileSetFromFS(fsys, imgFilename, imgPath, tileset.TileWidth, tileset.TileHeight); err != nil {
+		return TilesetInfo{}, fmt.Errorf("failed to load tileset image %s: %w", imgPath, err)
+	}
+
+	return TilesetInfo{
+		imgSource: tileset.Image.Source,
+		tileW:     tileset.TileWidth,
+		tileH:     tileset.TileHeight,
+	}, nil
+}
+
+func resolvePath(baseDir, path string) string {
+	if baseDir == "" {
+		return path
+	}
+	return filepath.Join(baseDir, path)
+}
+
+func normalizeTmxDir(pathToTmx string) string {
+	tmxDir := filepath.Dir(pathToTmx)
+	if tmxDir == "." {
+		return ""
+	}
+	return tmxDir
 }

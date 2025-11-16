@@ -69,10 +69,10 @@ func (rs *RenderSystem) drawTiles(screen *ebiten.Image) {
 	viewportWorldW := int(float64(rs.camera.Viewport().W) / rs.camera.Zoom)
 	viewportWorldH := int(float64(rs.camera.Viewport().H) / rs.camera.Zoom)
 
-	tx0 := offsetX / rs.tileMap.TileW()
-	tx1 := (offsetX+viewportWorldW)/rs.tileMap.TileW() + 1
-	ty0 := offsetY / rs.tileMap.TileH()
-	ty1 := (offsetY+viewportWorldH)/rs.tileMap.TileH() + 1
+	tx0 := offsetX / rs.tileMap.TileWidth
+	tx1 := (offsetX+viewportWorldW)/rs.tileMap.TileWidth + 1
+	ty0 := offsetY / rs.tileMap.TileHeight
+	ty1 := (offsetY+viewportWorldH)/rs.tileMap.TileHeight + 1
 
 	viewRect := image.Rect(tx0, ty0, tx1, ty1)
 
@@ -80,8 +80,8 @@ func (rs *RenderSystem) drawTiles(screen *ebiten.Image) {
 	for layer := range rs.tileMap.NumLayers() {
 		err := rs.tileMap.ForEachIn(viewRect, layer, func(tx, ty, id int) {
 			worldCoords := geom.Vec2{
-				X: float64(tx * rs.tileMap.TileW()),
-				Y: float64(ty * rs.tileMap.TileH()),
+				X: float64(tx * rs.tileMap.TileWidth),
+				Y: float64(ty * rs.tileMap.TileHeight),
 			}
 			img, err := rs.tileMap.GetImageById(id)
 			if err != nil {
@@ -139,9 +139,8 @@ func NewMovementSystem(ents *EntityManager, tiles *assetmgr.TileMap, collLayer i
 }
 
 func (ms *MovementSystem) Update(dt float64) {
-
-	tw := float64(ms.tileMap.TileW())
-	th := float64(ms.tileMap.TileH())
+	tw := float64(ms.tileMap.TileWidth)
+	th := float64(ms.tileMap.TileHeight)
 
 	ms.entities.Each(func(e *Entity) {
 		m := e.Movement
