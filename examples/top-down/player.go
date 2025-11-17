@@ -11,6 +11,52 @@ import (
 	"github.com/samredway/ebx/geom"
 )
 
+func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
+	// The sprite sheet is a collection of 16x16 sprites each on a 48x48 canvas
+	// We want to render it as a 48x48 but set collision only to the inside 16x16
+	err := assets.LoadSpriteSheetFromFS(
+		gameassets.GameFS,
+		"Player",
+		"Player_sprites.png",
+		48, 48,
+	)
+	if err != nil {
+		panic(fmt.Errorf("Unable to load player sprite sheet"))
+	}
+
+	// Set position
+	pPos := &engine.PositionComponent{
+		Vec2: geom.Vec2{X: 100, Y: 200},
+	}
+
+	// Set collision component
+	pCollision := &engine.CollisionComponent{
+		Size:   geom.Size{W: 16, H: 16},
+		Offset: geom.Vec2{X: 16, Y: 16},
+	}
+
+	// Set Movement
+	pMov := &engine.MovementComponent{Speed: 150}
+
+	sprites, err := assets.GetSpriteSheet("Player")
+	if err != nil {
+		panic(fmt.Errorf("Unable to load sprites %w", err))
+	}
+
+	pRen := &engine.RenderComponent{Img: sprites[0]}
+
+	player := &engine.Entity{
+		Name:      "Player",
+		Position:  pPos,
+		Movement:  pMov,
+		Render:    pRen,
+		Collision: pCollision,
+		Script:    newPScript(assets),
+	}
+
+	return player
+}
+
 // pScript implements the engine.Script interface for player-specific behavior
 type pScript struct {
 	time       float64
@@ -108,50 +154,4 @@ func newPScript(assets *assetmgr.Assets) *pScript {
 		curAnim:    "idle_down",
 		animations: a,
 	}
-}
-
-func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
-	// The sprite sheet is a collection of 16x16 sprites each on a 48x48 canvas
-	// We want to render it as a 48x48 but set collision only to the inside 16x16
-	err := assets.LoadSpriteSheetFromFS(
-		gameassets.GameFS,
-		"Player",
-		"Player_sprites.png",
-		48, 48,
-	)
-	if err != nil {
-		panic(fmt.Errorf("Unable to load player sprite sheet"))
-	}
-
-	// Set position
-	pPos := &engine.PositionComponent{
-		Vec2: geom.Vec2{X: 100, Y: 200},
-	}
-
-	// Set collision component
-	pCollision := &engine.CollisionComponent{
-		Size:   geom.Size{W: 16, H: 16},
-		Offset: geom.Vec2{X: 16, Y: 16},
-	}
-
-	// Set Movement
-	pMov := &engine.MovementComponent{Speed: 150}
-
-	sprites, err := assets.GetSpriteSheet("Player")
-	if err != nil {
-		panic(fmt.Errorf("Unable to load sprites %w", err))
-	}
-
-	pRen := &engine.RenderComponent{Img: sprites[0]}
-
-	player := &engine.Entity{
-		Name:      "Player",
-		Position:  pPos,
-		Movement:  pMov,
-		Render:    pRen,
-		Collision: pCollision,
-		Script:    newPScript(assets),
-	}
-
-	return player
 }
