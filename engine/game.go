@@ -7,9 +7,13 @@ import (
 
 // PositionComponent holds entity's position coords only
 type PositionComponent struct {
-	geom.Vec2                 // X, Y
-	geom.Size                 // W, H
-	CollisionOffset geom.Vec2 // X, Y (allows collision pos to be different to render)
+	geom.Vec2 // X, Y
+}
+
+// CollisionComponent holds collision shape data
+type CollisionComponent struct {
+	Size   geom.Size // Collision box dimensions
+	Offset geom.Vec2 // Offset from position (allows collision pos to be different to render)
 }
 
 // MovementComponent holds entity's movement state
@@ -33,12 +37,13 @@ type Script interface {
 
 // Entity game entity type
 type Entity struct {
-	Name     string
-	Position *PositionComponent
-	Movement *MovementComponent
-	Render   *RenderComponent
-	Script   Script
-	Dead     bool
+	Name      string
+	Position  *PositionComponent
+	Movement  *MovementComponent
+	Render    *RenderComponent
+	Collision *CollisionComponent
+	Script    Script
+	Dead      bool
 }
 
 // EntityManager is a deliberately small abstraction to handle game entities

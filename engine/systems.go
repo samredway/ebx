@@ -159,8 +159,17 @@ func (ms *MovementSystem) Update(dt float64) {
 		oldX, oldY := pos.X, pos.Y
 
 		// move X, then Y (axis-separated → natural sliding)
-		newX, newY := ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, tw, pos.CollisionOffset)
-		newX, newY = ms.resolveYAxis(newX, newY, float64(pos.W), float64(pos.H), dy, th, pos.CollisionOffset)
+		// If no collision component, move freely without collision checks
+		if e.Collision == nil {
+			pos.X += dx
+			pos.Y += dy
+			m.IsMoving = true
+			m.FacingDir = m.DesiredDir
+			return
+		}
+
+		newX, newY := ms.resolveXAxis(pos.X, pos.Y, float64(e.Collision.Size.W), float64(e.Collision.Size.H), dx, tw, e.Collision.Offset)
+		newX, newY = ms.resolveYAxis(newX, newY, float64(e.Collision.Size.W), float64(e.Collision.Size.H), dy, th, e.Collision.Offset)
 
 		// Update position
 		pos.X, pos.Y = newX, newY

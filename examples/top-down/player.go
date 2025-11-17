@@ -123,11 +123,15 @@ func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
 		panic(fmt.Errorf("Unable to load player sprite sheet"))
 	}
 
-	// Set pos with offset
+	// Set position
 	pPos := &engine.PositionComponent{
-		Vec2:            geom.Vec2{X: 100, Y: 200},
-		Size:            geom.Size{W: 16, H: 16},
-		CollisionOffset: geom.Vec2{X: 16, Y: 16},
+		Vec2: geom.Vec2{X: 100, Y: 200},
+	}
+
+	// Set collision component
+	pCollision := &engine.CollisionComponent{
+		Size:   geom.Size{W: 16, H: 16},
+		Offset: geom.Vec2{X: 16, Y: 16},
 	}
 
 	// Set Movement
@@ -141,11 +145,12 @@ func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
 	pRen := &engine.RenderComponent{Img: sprites[0]}
 
 	player := &engine.Entity{
-		Name:     "Player",
-		Position: pPos,
-		Movement: pMov,
-		Render:   pRen,
-		Script:   newPScript(assets),
+		Name:      "Player",
+		Position:  pPos,
+		Movement:  pMov,
+		Render:    pRen,
+		Collision: pCollision,
+		Script:    newPScript(assets),
 	}
 
 	return player
