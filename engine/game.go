@@ -66,7 +66,7 @@ func (em *EntityManager) Update(dt float64) {
 	})
 }
 
-// RemoveDead removes all entityes marked Dead
+// RemoveDead removes all entities marked Dead
 func (em *EntityManager) RemoveDead() {
 	alive := em.entities[:0]
 	for _, e := range em.entities {
@@ -119,7 +119,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 // NewGame returns a Game object that can run in Ebiten.
-// You can must pass in a Scene argument that is your opening scene along with
+// You must pass in a Scene argument that is your opening scene along with
 // an Assets object which contains all the assets your game requires
 func NewGame(scene Scene, viewport geom.Size) *Game {
 	scene.SetViewport(viewport)

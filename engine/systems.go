@@ -33,7 +33,7 @@ func (rs *RenderSystem) Draw(screen *ebiten.Image) {
 	// Draw tiles first
 	rs.drawTiles(screen)
 
-	// Draw enitities
+	// Draw entities
 	rs.entities.Each(func(e *Entity) {
 		if e.Position == nil || e.Render == nil {
 			return

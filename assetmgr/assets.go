@@ -226,7 +226,7 @@ type TileMap struct {
 	tilesets          *TilesetManager // Tileset manager
 }
 
-// NumLayers returs the number of layers in the tilemap
+// NumLayers returns the number of layers in the tilemap
 func (tm *TileMap) NumLayers() int { return len(tm.Layers) }
 
 // GetImageById returns the tile image for a given global tile ID
