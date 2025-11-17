@@ -23,17 +23,13 @@ type ExampleScene struct {
 
 // OnEnter sets up the scene by initializing base systems and creating entities
 func (es *ExampleScene) OnEnter() {
-	// Load game assets and tilemap -------------------------------------------
+	// Load tilemap -----------------------------------------------------------
 	es.assets = assetmgr.NewAssets()
 	es.assets.LoadTileSetFromFS(gameassets.GameFS, "Dungeon_floor", "DungeonFloors.png", 16, 16)
 	var err error
 	es.tilemap, err = assetmgr.NewTileMapFromTmx(gameassets.GameFS, "example.tmx", es.assets)
 	if err != nil {
 		panic(fmt.Errorf("Unable to load tilemap %w", err))
-	}
-	err = es.assets.LoadSpriteSheetFromFS(gameassets.GameFS, "Player", "Player_sprites.png", 16, 16)
-	if err != nil {
-		panic(fmt.Errorf("Unable to load player sprite sheet"))
 	}
 
 	// Create player enity -----------------------------------------------------

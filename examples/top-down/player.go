@@ -7,6 +7,7 @@ import (
 
 	"github.com/samredway/ebx/assetmgr"
 	"github.com/samredway/ebx/engine"
+	gameassets "github.com/samredway/ebx/examples/top-down/assets"
 	"github.com/samredway/ebx/geom"
 )
 
@@ -91,43 +92,15 @@ func newPScript(assets *assetmgr.Assets) *pScript {
 		panic("Error retrieving spritesheet 'Player'")
 	}
 
-	// The spritesheet is a 16x16 tile grid with 18 tiles per row.
-	// Each animation row has 6 frames laid out like:
-	//
-	//   E S E E S E E S E E S E E S E E S E
-	//     ^   ^   ^   ^   ^   ^
-	//     6 sprites, each 3 tiles apart, starting at column 1
-	//
-	// Rows with sprites are at tile rows 1,4,7,10,13,16,19,22,...
-	// After splitting into tiles without filtering, the frame indices
-	// we care about in the flat `anims` slice are:
-	//
-	//   idle_down  : 19  + 3*k, k=0..5
-	//   idle_up    : 73  + 3*k
-	//   idle_right : 127 + 3*k
-	//   idle_left  : 181 + 3*k
-	//   walk_down  : 235 + 3*k
-	//   walk_up    : 289 + 3*k
-	//   walk_right : 343 + 3*k
-	//   walk_left  : 397 + 3*k
-	//
-	row := func(start int) []*ebiten.Image {
-		frames := make([]*ebiten.Image, 0, 6)
-		for i := 0; i < 6; i++ {
-			frames = append(frames, anims[start+i*3])
-		}
-		return frames
-	}
+	a["idle_down"] = anims[0:6]
+	a["idle_up"] = anims[6:12]
+	a["idle_right"] = anims[12:18]
+	a["idle_left"] = anims[18:24]
 
-	a["idle_down"] = row(19)
-	a["idle_up"] = row(73)
-	a["idle_right"] = row(127)
-	a["idle_left"] = row(181)
-
-	a["walk_down"] = row(235)
-	a["walk_up"] = row(289)
-	a["walk_right"] = row(343)
-	a["walk_left"] = row(397)
+	a["walk_down"] = anims[24:30]
+	a["walk_up"] = anims[30:36]
+	a["walk_right"] = anims[36:42]
+	a["walk_left"] = anims[42:48]
 
 	return &pScript{
 		animRate:   0.15,
@@ -138,12 +111,27 @@ func newPScript(assets *assetmgr.Assets) *pScript {
 }
 
 func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
-	pPos := &engine.PositionComponent{
-		Vec2: geom.Vec2{X: 100, Y: 200},
-		Size: geom.Size{W: 16, H: 16},
+	// The sprite sheet is a collection of 16x16 sprites each on a 48x48 canvas
+	// We want to render it as a 48x48 but set collision only to the inside 16x16
+	err := assets.LoadSpriteSheetFromFS(
+		gameassets.GameFS,
+		"Player",
+		"Player_sprites.png",
+		48, 48,
+	)
+	if err != nil {
+		panic(fmt.Errorf("Unable to load player sprite sheet"))
 	}
 
-	pMov := &engine.MovementComponent{Speed: 200}
+	// Set pos with offset
+	pPos := &engine.PositionComponent{
+		Vec2:            geom.Vec2{X: 100, Y: 200},
+		Size:            geom.Size{W: 16, H: 16},
+		CollisionOffset: geom.Vec2{X: 16, Y: 16},
+	}
+
+	// Set Movement
+	pMov := &engine.MovementComponent{Speed: 150}
 
 	sprites, err := assets.GetSpriteSheet("Player")
 	if err != nil {

@@ -121,9 +121,8 @@ func NewRenderSystem(
 }
 
 // MovementSystem handles updating position component for corresponding entity
-// based on movement data
-// MovementSystem updates entity positions based on movement components
-// Uses a map for both iteration and O(1) lookup via GetMovement()
+// based on movement data.
+// Checks whether a movement is possible by looking at tile map before moving
 type MovementSystem struct {
 	entities       *EntityManager
 	tileMap        *assetmgr.TileMap
@@ -160,8 +159,8 @@ func (ms *MovementSystem) Update(dt float64) {
 		oldX, oldY := pos.X, pos.Y
 
 		// move X, then Y (axis-separated → natural sliding)
-		newX, newY := ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, tw)
-		newX, newY = ms.resolveYAxis(newX, newY, float64(pos.W), float64(pos.H), dy, th)
+		newX, newY := ms.resolveXAxis(pos.X, pos.Y, float64(pos.W), float64(pos.H), dx, tw, pos.CollisionOffset)
+		newX, newY = ms.resolveYAxis(newX, newY, float64(pos.W), float64(pos.H), dy, th, pos.CollisionOffset)
 
 		// Update position
 		pos.X, pos.Y = newX, newY
@@ -202,11 +201,11 @@ func (ms *MovementSystem) Update(dt float64) {
 //  3. If yes, "push back" to the edge of the blocking tile
 //
 // Returns the resolved (x, y) position.
-func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (float64, float64) {
+func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64, colOffset geom.Vec2) (float64, float64) {
 	// Try to move to the new X position
 	newX := posX + dx
 
-	overlaps, err := ms.tileMap.OverlapsTiles(newX, posY, w, h, ms.collisionLayer)
+	overlaps, err := ms.tileMap.OverlapsTiles(newX+colOffset.X, posY+colOffset.Y, w, h, ms.collisionLayer)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
 	}
@@ -238,11 +237,11 @@ func (ms *MovementSystem) resolveXAxis(posX, posY, w, h, dx, tileW float64) (flo
 //  3. If yes, "push back" to the edge of the blocking tile
 //
 // Returns the resolved (x, y) position.
-func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64) (float64, float64) {
+func (ms *MovementSystem) resolveYAxis(posX, posY, w, h, dy, tileH float64, colOffset geom.Vec2) (float64, float64) {
 	// Try to move to the new Y position
 	newY := posY + dy
 
-	overlaps, err := ms.tileMap.OverlapsTiles(posX, newY, w, h, ms.collisionLayer)
+	overlaps, err := ms.tileMap.OverlapsTiles(posX+colOffset.X, newY+colOffset.Y, w, h, ms.collisionLayer)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to check tile collision: %v", err))
 	}

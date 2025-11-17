@@ -7,8 +7,9 @@ import (
 
 // PositionComponent holds entity's position coords only
 type PositionComponent struct {
-	geom.Vec2 // X, Y
-	geom.Size // W, H
+	geom.Vec2                 // X, Y
+	geom.Size                 // W, H
+	CollisionOffset geom.Vec2 // X, Y (allows collision pos to be different to render)
 }
 
 // MovementComponent holds entity's movement state
