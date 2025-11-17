@@ -8,7 +8,12 @@ import (
 // PositionComponent holds entity's position coords only
 type PositionComponent struct {
 	geom.Vec2 // X, Y
-	geom.Size // W, H
+}
+
+// CollisionComponent holds collision shape data
+type CollisionComponent struct {
+	Size   geom.Size // Collision box dimensions
+	Offset geom.Vec2 // Offset from position (allows collision pos to be different to render)
 }
 
 // MovementComponent holds entity's movement state
@@ -32,21 +37,18 @@ type Script interface {
 
 // Entity game entity type
 type Entity struct {
-	Name     string
-	Position *PositionComponent
-	Movement *MovementComponent
-	Render   *RenderComponent
-	Script   Script
-	Dead     bool
+	Name      string
+	Position  *PositionComponent
+	Movement  *MovementComponent
+	Render    *RenderComponent
+	Collision *CollisionComponent
+	Script    Script
+	Dead      bool
 }
 
 // EntityManager is a deliberately small abstraction to handle game entities
 type EntityManager struct {
 	entities []*Entity
-}
-
-func NewEntityManager() *EntityManager {
-	return &EntityManager{entities: []*Entity{}}
 }
 
 // Add adds new entity
@@ -69,7 +71,7 @@ func (em *EntityManager) Update(dt float64) {
 	})
 }
 
-// RemoveDead removes all entityes marked Dead
+// RemoveDead removes all entities marked Dead
 func (em *EntityManager) RemoveDead() {
 	alive := em.entities[:0]
 	for _, e := range em.entities {
@@ -78,6 +80,10 @@ func (em *EntityManager) RemoveDead() {
 		}
 	}
 	em.entities = alive
+}
+
+func NewEntityManager() *EntityManager {
+	return &EntityManager{entities: []*Entity{}}
 }
 
 // Scene is a level or view like a menu screen for example that has its own
@@ -95,18 +101,6 @@ type Scene interface {
 type Game struct {
 	curr     Scene
 	viewport geom.Size
-}
-
-// NewGame returns a Game object that can run in Ebiten.
-// You can must pass in a Scene argument that is your opening scene along with
-// an Assets object which contains all the assets your game requires
-func NewGame(scene Scene, viewport geom.Size) *Game {
-	scene.SetViewport(viewport)
-	scene.OnEnter()
-	return &Game{
-		curr:     scene,
-		viewport: viewport,
-	}
 }
 
 func (g *Game) Update() error {
@@ -127,4 +121,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return g.viewport.W, g.viewport.H
+}
+
+// NewGame returns a Game object that can run in Ebiten.
+// You must pass in a Scene argument that is your opening scene along with
+// an Assets object which contains all the assets your game requires
+func NewGame(scene Scene, viewport geom.Size) *Game {
+	scene.SetViewport(viewport)
+	scene.OnEnter()
+	return &Game{
+		curr:     scene,
+		viewport: viewport,
+	}
 }

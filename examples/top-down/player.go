@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/samredway/ebx/assetmgr"
 	"github.com/samredway/ebx/engine"
+	gameassets "github.com/samredway/ebx/examples/top-down/assets"
 	"github.com/samredway/ebx/geom"
 )
 
@@ -18,32 +18,6 @@ type pScript struct {
 	curAnim    string
 	curFrame   int
 	animations map[string][]*ebiten.Image
-}
-
-func NewPScript(assets *assetmgr.Assets) *pScript {
-	a := map[string][]*ebiten.Image{}
-
-	// Setup animations
-	for _, name := range []string{"Idle", "Walk"} {
-		anims, err := assets.GetSpriteSheet(fmt.Sprintf("Character_%s.png", name))
-		if err != nil {
-			panic(fmt.Errorf("Error getting sprite sheet: %w", err))
-		}
-
-		nameLower := strings.ToLower(name)
-
-		a[fmt.Sprintf("%s_left", nameLower)] = anims[0:4]
-		a[fmt.Sprintf("%s_right", nameLower)] = anims[4:8]
-		a[fmt.Sprintf("%s_up", nameLower)] = anims[8:12]
-		a[fmt.Sprintf("%s_down", nameLower)] = anims[12:16]
-	}
-
-	return &pScript{
-		animRate:   0.15,
-		curFrame:   0,
-		curAnim:    "idle_down",
-		animations: a,
-	}
 }
 
 func (ps *pScript) Update(e *engine.Entity, dt float64) {
@@ -109,27 +83,74 @@ func (ps *pScript) updateAnimations(m *engine.MovementComponent, dt float64) {
 	ps.curFrame %= len(ps.animations[ps.curAnim])
 }
 
-func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
-	pPos := &engine.PositionComponent{
-		Vec2: geom.Vec2{X: 100, Y: 200},
-		Size: geom.Size{W: 16, H: 16},
+func newPScript(assets *assetmgr.Assets) *pScript {
+	a := map[string][]*ebiten.Image{}
+
+	// Setup animations
+	anims, err := assets.GetSpriteSheet("Player")
+	if err != nil {
+		panic("Error retrieving spritesheet 'Player'")
 	}
 
-	pMov := &engine.MovementComponent{Speed: 200}
+	a["idle_down"] = anims[0:6]
+	a["idle_up"] = anims[6:12]
+	a["idle_right"] = anims[12:18]
+	a["idle_left"] = anims[18:24]
 
-	pIdle, err := assets.GetSpriteSheet("Character_Idle.png")
+	a["walk_down"] = anims[24:30]
+	a["walk_up"] = anims[30:36]
+	a["walk_right"] = anims[36:42]
+	a["walk_left"] = anims[42:48]
+
+	return &pScript{
+		animRate:   0.15,
+		curFrame:   0,
+		curAnim:    "idle_down",
+		animations: a,
+	}
+}
+
+func NewPlayer(assets *assetmgr.Assets) *engine.Entity {
+	// The sprite sheet is a collection of 16x16 sprites each on a 48x48 canvas
+	// We want to render it as a 48x48 but set collision only to the inside 16x16
+	err := assets.LoadSpriteSheetFromFS(
+		gameassets.GameFS,
+		"Player",
+		"Player_sprites.png",
+		48, 48,
+	)
+	if err != nil {
+		panic(fmt.Errorf("Unable to load player sprite sheet"))
+	}
+
+	// Set position
+	pPos := &engine.PositionComponent{
+		Vec2: geom.Vec2{X: 100, Y: 200},
+	}
+
+	// Set collision component
+	pCollision := &engine.CollisionComponent{
+		Size:   geom.Size{W: 16, H: 16},
+		Offset: geom.Vec2{X: 16, Y: 16},
+	}
+
+	// Set Movement
+	pMov := &engine.MovementComponent{Speed: 150}
+
+	sprites, err := assets.GetSpriteSheet("Player")
 	if err != nil {
 		panic(fmt.Errorf("Unable to load sprites %w", err))
 	}
 
-	pRen := &engine.RenderComponent{Img: pIdle[0]}
+	pRen := &engine.RenderComponent{Img: sprites[0]}
 
 	player := &engine.Entity{
-		Name:     "Player",
-		Position: pPos,
-		Movement: pMov,
-		Render:   pRen,
-		Script:   NewPScript(assets),
+		Name:      "Player",
+		Position:  pPos,
+		Movement:  pMov,
+		Render:    pRen,
+		Collision: pCollision,
+		Script:    newPScript(assets),
 	}
 
 	return player

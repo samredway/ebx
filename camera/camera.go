@@ -15,13 +15,6 @@ type Camera struct {
 	Zoom      float64         // Zoom level (1.0 = normal, 2.0 = 2x zoom, etc.)
 }
 
-// NewCamera creates a new camera at 0,0 that can be set to a position later
-// when CenterOn gets called
-func NewCamera(viewport geom.Size, bounds image.Rectangle) *Camera {
-	pos := geom.Vec2{X: 0.0, Y: 0.0}
-	return &Camera{Vec2: pos, viewport: viewport, bounds: bounds, Zoom: 1.0}
-}
-
 // Viewport returns the viewport size
 func (c *Camera) Viewport() geom.Size { return c.viewport }
 
@@ -54,4 +47,11 @@ func (c *Camera) clamp() {
 	if c.Y > maxY {
 		c.Y = maxY
 	}
+}
+
+// NewCamera creates a new camera at 0,0 that can be set to a position later
+// when CenterOn gets called
+func NewCamera(viewport geom.Size, bounds image.Rectangle) *Camera {
+	pos := geom.Vec2{X: 0.0, Y: 0.0}
+	return &Camera{Vec2: pos, viewport: viewport, bounds: bounds, Zoom: 1.0}
 }
