@@ -64,49 +64,43 @@ type pScript struct {
 	curAnim    string
 	curFrame   int
 	animations map[string][]*ebiten.Image
+	attacking  bool
 }
 
 func (ps *pScript) Update(e *engine.Entity, dt float64) {
-	direction := geom.Vec2I{}
-	if ebiten.IsKeyPressed(ebiten.KeyUp) {
-		direction.Y -= 1
+	if ebiten.IsKeyPressed(ebiten.KeySpace) || ps.attacking {
+		// Set attacking to true and ignore any movement
+		ps.attacking = true
+		e.Movement.IsMoving = false
+		e.Movement.DesiredDir = geom.Vec2I{X: 0, Y: 0}
+		ps.updateAttackAnimations(e.Movement, dt)
+	} else {
+		e.Movement.DesiredDir = getDir()
+		ps.updateWalkAnimations(e.Movement, dt)
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyDown) {
-		direction.Y += 1
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
-		direction.X -= 1
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyRight) {
-		direction.X += 1
-	}
-
-	// update desired movement
-	e.Movement.DesiredDir = direction
-
-	// update animation frame
-	ps.updateAnimations(e.Movement, dt)
 
 	// update Render.Img
 	e.Render.Img = ps.animations[ps.curAnim][ps.curFrame]
 }
 
-func (ps *pScript) updateAnimations(m *engine.MovementComponent, dt float64) {
-	var nextAnim string
-	var dirString string
+func (ps *pScript) updateAttackAnimations(m *engine.MovementComponent, dt float64) {
+	dirString := getDirString(m)
 
-	switch {
-	case m.FacingDir.Y < 0:
-		dirString = "up"
-	case m.FacingDir.Y > 0:
-		dirString = "down"
-	case m.FacingDir.X < 0:
-		dirString = "left"
-	case m.FacingDir.X > 0:
-		dirString = "right"
-	default:
-		dirString = "down"
+	// If it is the last frame automatically transition to idel
+	var nextAnim string
+	if ps.curFrame != 5 {
+		nextAnim = "attack_" + dirString
+	} else {
+		ps.attacking = false
+		nextAnim = "idle_" + dirString
 	}
+
+	tickAnimationFrame(ps, nextAnim, dt)
+}
+
+func (ps *pScript) updateWalkAnimations(m *engine.MovementComponent, dt float64) {
+	dirString := getDirString(m)
+	var nextAnim string
 
 	if m.IsMoving {
 		nextAnim = "walk_" + dirString
@@ -114,6 +108,10 @@ func (ps *pScript) updateAnimations(m *engine.MovementComponent, dt float64) {
 		nextAnim = "idle_" + dirString
 	}
 
+	tickAnimationFrame(ps, nextAnim, dt)
+}
+
+func tickAnimationFrame(ps *pScript, nextAnim string, dt float64) {
 	if nextAnim != ps.curAnim {
 		ps.curFrame = 0
 		ps.curAnim = nextAnim
@@ -127,6 +125,38 @@ func (ps *pScript) updateAnimations(m *engine.MovementComponent, dt float64) {
 
 	// Wrap the frame to 0
 	ps.curFrame %= len(ps.animations[ps.curAnim])
+}
+
+func getDir() geom.Vec2I {
+	direction := geom.Vec2I{}
+	if ebiten.IsKeyPressed(ebiten.KeyUp) {
+		direction.Y -= 1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyDown) {
+		direction.Y += 1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		direction.X -= 1
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		direction.X += 1
+	}
+	return direction
+}
+
+func getDirString(m *engine.MovementComponent) string {
+	switch {
+	case m.FacingDir.Y < 0:
+		return "up"
+	case m.FacingDir.Y > 0:
+		return "down"
+	case m.FacingDir.X < 0:
+		return "left"
+	case m.FacingDir.X > 0:
+		return "right"
+	default:
+		return "down"
+	}
 }
 
 func newPScript(assets *assetmgr.Assets) *pScript {
@@ -147,6 +177,11 @@ func newPScript(assets *assetmgr.Assets) *pScript {
 	a["walk_up"] = anims[30:36]
 	a["walk_right"] = anims[36:42]
 	a["walk_left"] = anims[42:48]
+
+	a["attack_down"] = anims[96:102]
+	a["attack_up"] = anims[102:108]
+	a["attack_right"] = anims[108:114]
+	a["attack_left"] = anims[114:120]
 
 	return &pScript{
 		animRate:   0.15,
