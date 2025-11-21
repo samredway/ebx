@@ -10,6 +10,7 @@ import (
 	"github.com/samredway/ebx/engine"
 	gameassets "github.com/samredway/ebx/examples/top-down/assets"
 	"github.com/samredway/ebx/examples/top-down/entities"
+	"github.com/samredway/ebx/geom"
 )
 
 // ExampleScene demonstrates using the topdown.BaseScene for rapid prototyping
@@ -39,6 +40,10 @@ func (es *ExampleScene) OnEnter() {
 	// Create entity manager and add player
 	es.entities = engine.NewEntityManager()
 	es.entities.Add(player)
+
+	// Create Slime Entity -----------------------------------------------------
+	slime1 := entities.NewSlime(es.assets, geom.Vec2{X: 200, Y: 300}, "Slime1", player, es.tilemap, 1)
+	es.entities.Add(slime1)
 
 	// Init systems ------------------------------------------------------------
 	mapWidth := es.tilemap.MapWidth * es.tilemap.TileWidth
